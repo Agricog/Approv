@@ -45,11 +45,12 @@ export function ApprovalActions({
     }
   }
 
-  const handleRequestChanges = async (notes: string) => {
+  const handleRequestChanges = async (notes: string): Promise<boolean> => {
     const success = await onRequestChanges(notes)
     if (success) {
       setShowChangesModal(false)
     }
+    return success
   }
 
   return (
