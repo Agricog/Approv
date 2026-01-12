@@ -13,8 +13,7 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  BarChart3,
-  PieChart
+  BarChart3
 } from 'lucide-react'
 import { 
   DashboardLayout, 
@@ -22,7 +21,6 @@ import {
   ContentCard 
 } from '../../components/layout'
 import { 
-  LoadingSpinner, 
   ErrorMessage,
   Button,
   SkeletonCard
@@ -37,7 +35,6 @@ import {
 import { trackDateRangeChanged, trackReportExported } from '../../utils/analytics'
 import type { 
   TimePeriod, 
-  DateRange, 
   DashboardMetrics, 
   TimelineDataPoint, 
   StageBreakdown 
@@ -47,11 +44,16 @@ import type {
 // TYPES
 // =============================================================================
 
+interface AnalyticsDateRange {
+  start: string
+  end: string
+}
+
 interface AnalyticsData {
   metrics: DashboardMetrics
   timeline: TimelineDataPoint[]
   byStage: StageBreakdown[]
-  dateRange: DateRange
+  dateRange: AnalyticsDateRange
 }
 
 // =============================================================================
