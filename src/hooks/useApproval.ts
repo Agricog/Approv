@@ -177,8 +177,9 @@ export function useApproval(token?: string): UseApprovalReturn {
       // Calculate response time for analytics
       const responseTimeHours = getDaysPending(state.approval.createdAt) * 24
 
-      // Track successful submission
-      trackApprovalSubmitted(state.approval.approvalStage, action, responseTimeHours)
+      // Track successful submission (map action to analytics type)
+      const analyticsAction = action === 'approve' ? 'approved' : 'changes_requested'
+      trackApprovalSubmitted(state.approval.approvalStage, analyticsAction, responseTimeHours)
       addActionBreadcrumb(`Approval ${action}`, 'approval', {
         stage: state.approval.approvalStage,
         responseTimeHours
