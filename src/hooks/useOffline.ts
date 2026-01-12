@@ -217,15 +217,17 @@ interface NetworkInformation {
 }
 
 function getConnection(): NetworkInformation | null {
-  if (typeof navigator !== 'undefined') {
-    return (
-      (navigator as unknown as { connection?: NetworkInformation }).connection ||
-      (navigator as unknown as { mozConnection?: NetworkInformation }).mozConnection ||
-      (navigator as unknown as { webkitConnection?: NetworkInformation }).webkitConnection ||
-      null
-    )
+  if (typeof navigator === 'undefined') {
+    return null
   }
-  return null
+  
+  const nav = navigator as unknown as {
+    connection?: NetworkInformation
+    mozConnection?: NetworkInformation
+    webkitConnection?: NetworkInformation
+  }
+  
+  return nav.connection || nav.mozConnection || nav.webkitConnection || null
 }
 
 function getNetworkStatus(): NetworkStatus {
