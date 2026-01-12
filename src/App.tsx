@@ -1,40 +1,102 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+/**
+ * App Component
+ * Main application router with all routes
+ */
+
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import { CheckCircle } from 'lucide-react'
+
+// Pages
+import { 
+  PortalHome, 
+  ProjectDetail,
+  DashboardHome, 
+  ProjectList, 
+  AnalyticsDashboard 
+} from './pages'
+
+// Approval components
+import { ApprovalPage } from './components/approval'
+
+// Layouts
+import { DashboardLayout } from './components/layout'
+
+// Analytics
+import { usePageTracking } from './hooks/useAnalytics'
 
 // =============================================================================
-// PLACEHOLDER COMPONENTS - Will be replaced in subsequent batches
+// SENTRY WRAPPED ROUTES
 // =============================================================================
 
-function Home() {
+const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+
+// =============================================================================
+// PAGE TRACKER COMPONENT
+// =============================================================================
+
+function PageTracker({ children }: { children: React.ReactNode }) {
+  usePageTracking()
+  return <>{children}</>
+}
+
+// =============================================================================
+// PLACEHOLDER PAGES
+// =============================================================================
+
+function SettingsPage() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center animate-fade-in">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle className="w-8 h-8 text-green-600" aria-hidden="true" />
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Approv</h1>
-        <p className="text-gray-600">Client approvals made simple</p>
-        <p className="text-sm text-gray-400 mt-4">Build in progress...</p>
+    <DashboardLayout>
+      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
+        <p className="text-gray-600">Settings page coming soon.</p>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
 
-function NotFound() {
+function TeamPage() {
+  return (
+    <DashboardLayout>
+      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Team</h1>
+        <p className="text-gray-600">Team management coming soon.</p>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+function ActivityPage() {
+  return (
+    <DashboardLayout>
+      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Activity</h1>
+        <p className="text-gray-600">Activity log coming soon.</p>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+function ApprovalsPage() {
+  return (
+    <DashboardLayout>
+      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Approvals</h1>
+        <p className="text-gray-600">Approvals management coming soon.</p>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+function NotFoundPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center animate-fade-in">
-        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl" role="img" aria-label="Search">🔍</span>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Page Not Found</h1>
-        <p className="text-gray-600 mb-6">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
+      <div className="text-center">
+        <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">Page Not Found</h2>
+        <p className="text-gray-600 mb-6">The page you're looking for doesn't exist.</p>
         <a 
-          href="/" 
-          className="btn-primary inline-block"
+          href="/"
+          className="inline-flex items-center px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
         >
           Go Home
         </a>
@@ -43,14 +105,50 @@ function NotFound() {
   )
 }
 
-// =============================================================================
-// SENTRY ROUTING WRAPPER
-// =============================================================================
+function HomePage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-white">
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-8">
+          <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        
+        <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+          Approv
+        </h1>
+        
+        <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          Professional client approval workflows for architecture and design practices. 
+          Get project sign-offs faster.
+        </p>
 
-const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <a 
+            href="/dashboard"
+            className="inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Go to Dashboard
+          </a>
+          <a 
+            href="/portal"
+            className="inline-flex items-center justify-center px-6 py-3 bg-white text-green-600 font-medium rounded-lg border-2 border-green-600 hover:bg-green-50 transition-colors"
+          >
+            Client Portal
+          </a>
+        </div>
+
+        <p className="mt-12 text-sm text-gray-500">
+          © {new Date().getFullYear()} Approv. Part of the Autaimate family.
+        </p>
+      </div>
+    </div>
+  )
+}
 
 // =============================================================================
-// MAIN APP COMPONENT
+// MAIN APP
 // =============================================================================
 
 export default function App() {
@@ -61,30 +159,40 @@ export default function App() {
         Skip to main content
       </a>
       
-      <main id="main-content">
-        <SentryRoutes>
-          {/* Public routes */}
-          <Route path="/" element={<Home />} />
-          
-          {/* Client approval routes */}
-          <Route path="/approve/:token" element={<Home />} />
-          <Route path="/approve/:token/confirmed" element={<Home />} />
-          <Route path="/approve/:token/changes" element={<Home />} />
-          
-          {/* Client portal routes */}
-          <Route path="/portal" element={<Home />} />
-          <Route path="/portal/project/:projectId" element={<Home />} />
-          
-          {/* Team dashboard routes */}
-          <Route path="/dashboard" element={<Home />} />
-          <Route path="/dashboard/analytics" element={<Home />} />
-          <Route path="/dashboard/projects" element={<Home />} />
-          <Route path="/dashboard/settings" element={<Home />} />
-          
-          {/* 404 catch-all */}
-          <Route path="*" element={<NotFound />} />
-        </SentryRoutes>
-      </main>
+      <PageTracker>
+        <main id="main-content">
+          <SentryRoutes>
+            {/* Home */}
+            <Route path="/" element={<HomePage />} />
+
+            {/* Approval flow (public, token-based) */}
+            <Route path="/approve/:token" element={<ApprovalPage />} />
+            <Route path="/approve/:token/confirmed" element={<ApprovalPage />} />
+            <Route path="/approve/:token/changes" element={<ApprovalPage />} />
+
+            {/* Client portal */}
+            <Route path="/portal" element={<PortalHome />} />
+            <Route path="/portal/project/:projectId" element={<ProjectDetail />} />
+
+            {/* Dashboard */}
+            <Route path="/dashboard" element={<DashboardHome />} />
+            <Route path="/dashboard/projects" element={<ProjectList />} />
+            <Route path="/dashboard/projects/:projectId" element={<ProjectList />} />
+            <Route path="/dashboard/approvals" element={<ApprovalsPage />} />
+            <Route path="/dashboard/analytics" element={<AnalyticsDashboard />} />
+            <Route path="/dashboard/team" element={<TeamPage />} />
+            <Route path="/dashboard/activity" element={<ActivityPage />} />
+            <Route path="/dashboard/notifications" element={<ActivityPage />} />
+            <Route path="/dashboard/settings" element={<SettingsPage />} />
+
+            {/* Redirects */}
+            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+            
+            {/* 404 */}
+            <Route path="*" element={<NotFoundPage />} />
+          </SentryRoutes>
+        </main>
+      </PageTracker>
     </BrowserRouter>
   )
 }
