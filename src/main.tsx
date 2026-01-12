@@ -106,7 +106,11 @@ const root = createRoot(container)
 
 root.render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={({ error }) => <ErrorFallback error={error} />}>
+    <Sentry.ErrorBoundary 
+      fallback={({ error }) => (
+        <ErrorFallback error={error instanceof Error ? error : new Error(String(error))} />
+      )}
+    >
       <HelmetProvider>
         <App />
       </HelmetProvider>
