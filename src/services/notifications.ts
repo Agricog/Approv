@@ -6,13 +6,7 @@
 
 import { api } from './api'
 import { captureError } from '../utils/errorTracking'
-import type { 
-  NotificationChannel, 
-  EmailNotification, 
-  SmsNotification, 
-  SlackNotification,
-  NotificationPreferences
-} from '../types'
+import type { NotificationChannel, NotificationPreferences } from '../types'
 
 // =============================================================================
 // TYPES
@@ -79,12 +73,13 @@ export const emailNotifications = {
         channel: 'email',
         error: response.error?.message || 'Failed to send email'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'email_notification' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'email_approval_request' })
       return {
         success: false,
         channel: 'email',
-        error: (error as Error).message
+        error: error.message
       }
     }
   },
@@ -124,12 +119,13 @@ export const emailNotifications = {
         channel: 'email',
         error: response.error?.message || 'Failed to send reminder'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'email_reminder' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'email_reminder' })
       return {
         success: false,
         channel: 'email',
-        error: (error as Error).message
+        error: error.message
       }
     }
   },
@@ -169,12 +165,13 @@ export const emailNotifications = {
         channel: 'email',
         error: response.error?.message || 'Failed to send confirmation'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'email_confirmation' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'email_confirmation' })
       return {
         success: false,
         channel: 'email',
-        error: (error as Error).message
+        error: error.message
       }
     }
   },
@@ -213,12 +210,13 @@ export const emailNotifications = {
         channel: 'email',
         error: response.error?.message || 'Failed to notify team'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'email_team_notification' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'email_team' })
       return {
         success: false,
         channel: 'email',
-        error: (error as Error).message
+        error: error.message
       }
     }
   }
@@ -260,12 +258,13 @@ export const smsNotifications = {
         channel: 'sms',
         error: response.error?.message || 'Failed to send SMS'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'sms_notification' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'sms_reminder' })
       return {
         success: false,
         channel: 'sms',
-        error: (error as Error).message
+        error: error.message
       }
     }
   },
@@ -302,12 +301,13 @@ export const smsNotifications = {
         channel: 'sms',
         error: response.error?.message || 'Failed to send escalation SMS'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'sms_escalation' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'sms_escalation' })
       return {
         success: false,
         channel: 'sms',
-        error: (error as Error).message
+        error: error.message
       }
     }
   }
@@ -352,12 +352,13 @@ export const slackNotifications = {
         channel: 'slack',
         error: response.error?.message || 'Failed to send Slack message'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'slack_notification' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'slack_channel' })
       return {
         success: false,
         channel: 'slack',
-        error: (error as Error).message
+        error: error.message
       }
     }
   },
@@ -396,12 +397,13 @@ export const slackNotifications = {
         channel: 'slack',
         error: response.error?.message || 'Failed to send Slack alert'
       }
-    } catch (error) {
-      captureError(error as Error, { context: 'slack_bottleneck_alert' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'slack_bottleneck' })
       return {
         success: false,
         channel: 'slack',
-        error: (error as Error).message
+        error: error.message
       }
     }
   }
@@ -420,9 +422,10 @@ export const notificationPreferences = {
       const response = await api.get<NotificationPreferences>(
         `/users/${userId}/notification-preferences`
       )
-      return response.success ? response.data || null : null
-    } catch (error) {
-      captureError(error as Error, { context: 'get_notification_preferences' })
+      return response.success ? response.data : null
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'get_preferences' })
       return null
     }
   },
@@ -440,8 +443,9 @@ export const notificationPreferences = {
         preferences
       )
       return response.success
-    } catch (error) {
-      captureError(error as Error, { context: 'update_notification_preferences' })
+    } catch (err) {
+      const error = err as Error
+      captureError(error, { context: 'notification', action: 'update_preferences' })
       return false
     }
   }
@@ -455,34 +459,7 @@ export const notifications = {
   email: emailNotifications,
   sms: smsNotifications,
   slack: slackNotifications,
-  preferences: notificationPreferences,
-
-  /**
-   * Send notification through multiple channels based on preferences
-   */
-  async sendMultiChannel(
-    userId: string,
-    notification: {
-      type: 'approval_request' | 'reminder' | 'confirmation' | 'team_update'
-      data: Record<string, unknown>
-    }
-  ): Promise<SendNotificationResult[]> {
-    const prefs = await this.preferences.get(userId)
-    const results: SendNotificationResult[] = []
-
-    if (!prefs) {
-      return [{
-        success: false,
-        channel: 'email',
-        error: 'User preferences not found'
-      }]
-    }
-
-    // This would be expanded based on the notification type and user preferences
-    // For now, just a placeholder structure
-
-    return results
-  }
+  preferences: notificationPreferences
 }
 
 export default notifications
