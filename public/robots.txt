@@ -1,0 +1,32 @@
+# Approv Robots.txt
+# https://approv.co.uk
+
+User-agent: *
+
+# Allow public pages
+Allow: /
+Allow: /features
+Allow: /pricing
+Allow: /about
+Allow: /contact
+Allow: /blog
+
+# Disallow private/authenticated areas
+Disallow: /dashboard
+Disallow: /dashboard/*
+Disallow: /portal
+Disallow: /portal/*
+Disallow: /approve
+Disallow: /approve/*
+Disallow: /api
+Disallow: /api/*
+
+# Disallow utility pages
+Disallow: /login
+Disallow: /logout
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+
+# Sitemap location
+Sitemap: https://approv.co.uk/sitemap.xml
