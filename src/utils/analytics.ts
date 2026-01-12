@@ -126,9 +126,9 @@ export function trackApprovalSubmitted(
     action: `approval_${action}`,
     label: approvalStage,
     value: responseTimeHours ? Math.round(responseTimeHours) : undefined,
-    customDimensions: {
-      response_time_hours: responseTimeHours
-    }
+    customDimensions: responseTimeHours !== undefined 
+      ? { response_time_hours: responseTimeHours }
+      : undefined
   })
 }
 
