@@ -10,7 +10,6 @@ import { Header } from './Header'
 import { Sidebar, MobileSidebar } from './Sidebar'
 import { Footer } from './Footer'
 import { useOfflineBanner } from '../../hooks'
-import { ErrorMessage } from '../common'
 
 // =============================================================================
 // TYPES
