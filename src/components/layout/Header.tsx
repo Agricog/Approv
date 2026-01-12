@@ -15,7 +15,6 @@ import {
   ChevronDown,
   CheckCircle
 } from 'lucide-react'
-import { Button } from '../common'
 
 // =============================================================================
 // TYPES
