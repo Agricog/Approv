@@ -13,25 +13,25 @@ import DOMPurify from 'dompurify'
 /**
  * Strict config - removes all HTML, keeps only text
  */
-const STRICT_CONFIG: DOMPurify.Config = {
-  ALLOWED_TAGS: [],
-  ALLOWED_ATTR: [],
+const STRICT_CONFIG = {
+  ALLOWED_TAGS: [] as string[],
+  ALLOWED_ATTR: [] as string[],
   KEEP_CONTENT: true
 }
 
 /**
  * Basic config - allows basic formatting only
  */
-const BASIC_CONFIG: DOMPurify.Config = {
+const BASIC_CONFIG = {
   ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'br', 'p'],
-  ALLOWED_ATTR: [],
+  ALLOWED_ATTR: [] as string[],
   KEEP_CONTENT: true
 }
 
 /**
  * Rich config - allows more formatting (for admin content)
  */
-const RICH_CONFIG: DOMPurify.Config = {
+const RICH_CONFIG = {
   ALLOWED_TAGS: [
     'b', 'i', 'em', 'strong', 'br', 'p', 'span',
     'ul', 'ol', 'li',
@@ -39,9 +39,7 @@ const RICH_CONFIG: DOMPurify.Config = {
     'a', 'blockquote', 'code', 'pre'
   ],
   ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
-  ALLOW_DATA_ATTR: false,
-  ADD_ATTR: ['target'],
-  FORCE_BODY: true
+  ALLOW_DATA_ATTR: false
 }
 
 // =============================================================================
