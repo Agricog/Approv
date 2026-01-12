@@ -145,6 +145,7 @@ export function useOfflineBanner(
       
       return () => clearTimeout(timeout)
     }
+    return undefined
   }, [wasOffline, isOffline, showReconnectedFor])
 
   const dismissReconnected = useCallback(() => {
