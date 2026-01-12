@@ -6,7 +6,7 @@
 
 import { captureApiError } from '../utils/errorTracking'
 import { isRelativeUrl } from '../utils/validation'
-import type { ApiResponse, ApiError } from '../types'
+import type { ApiResult } from '../types'
 
 // =============================================================================
 // CONFIGURATION
@@ -21,10 +21,11 @@ const RETRY_DELAY = 1000
 // TYPES
 // =============================================================================
 
-export interface RequestConfig extends RequestInit {
+export interface RequestConfig extends Omit<RequestInit, 'headers'> {
   timeout?: number
   retries?: number
   skipCsrf?: boolean
+  headers?: Record<string, string>
 }
 
 interface CsrfToken {
@@ -108,7 +109,7 @@ function buildUrl(endpoint: string, params?: Record<string, string>): string {
 export async function apiRequest<T>(
   endpoint: string,
   config: RequestConfig = {}
-): Promise<ApiResponse<T>> {
+): Promise<ApiResult<T>> {
   const {
     timeout = DEFAULT_TIMEOUT,
     retries = MAX_RETRIES,
@@ -128,7 +129,7 @@ export async function apiRequest<T>(
       const timeoutId = setTimeout(() => controller.abort(), timeout)
 
       // Build headers
-      const requestHeaders: HeadersInit = {
+      const requestHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         ...headers
@@ -181,24 +182,26 @@ export async function apiRequest<T>(
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        const error: ApiError = {
-          code: data?.code || `HTTP_${response.status}`,
-          message: data?.message || response.statusText,
-          status: response.status,
-          details: data?.details
-        }
-
         // Retry on retryable errors
         if (isRetryableError(response.status) && attempt < retries) {
           await sleep(RETRY_DELAY * (attempt + 1))
           continue
         }
 
-        captureApiError(new Error(error.message), endpoint, response.status)
+        captureApiError(
+          new Error(data?.message || response.statusText), 
+          endpoint, 
+          method,
+          response.status
+        )
 
         return {
           success: false,
-          error
+          error: {
+            code: data?.code || `HTTP_${response.status}`,
+            message: data?.message || response.statusText,
+            details: data?.details
+          }
         }
       }
 
@@ -214,8 +217,7 @@ export async function apiRequest<T>(
           success: false,
           error: {
             code: 'TIMEOUT',
-            message: 'Request timed out',
-            status: 408
+            message: 'Request timed out'
           }
         }
       }
@@ -229,14 +231,13 @@ export async function apiRequest<T>(
   }
 
   // All retries exhausted
-  captureApiError(lastError || new Error('Request failed'), endpoint)
+  captureApiError(lastError || new Error('Request failed'), endpoint, method)
 
   return {
     success: false,
     error: {
       code: 'NETWORK_ERROR',
-      message: lastError?.message || 'Network error',
-      status: 0
+      message: lastError?.message || 'Network error'
     }
   }
 }
