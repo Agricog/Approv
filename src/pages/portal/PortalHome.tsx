@@ -24,11 +24,10 @@ import {
 import { 
   StatusBadge, 
   LoadingSpinner, 
-  ErrorMessage,
-  Button 
+  ErrorMessage
 } from '../../components/common'
 import { useApi } from '../../hooks'
-import { formatRelativeTime, formatDate } from '../../utils/formatters'
+import { formatRelativeTime } from '../../utils/formatters'
 import type { ProjectWithApprovals } from '../../types'
 
 // =============================================================================
