@@ -120,7 +120,7 @@ export class MondayClient {
 
       return data
     } catch (error) {
-      captureError(error as Error, { context: 'monday_api', query })
+      captureError(error as Error, { context: 'api', action: 'monday_query' })
       throw error
     }
   }
