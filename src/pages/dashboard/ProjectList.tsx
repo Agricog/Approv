@@ -12,8 +12,7 @@ import {
   Filter,
   ChevronRight,
   Clock,
-  CheckCircle,
-  MoreVertical
+  CheckCircle
 } from 'lucide-react'
 import { 
   DashboardLayout, 
@@ -22,7 +21,6 @@ import {
 } from '../../components/layout'
 import { 
   StatusBadge, 
-  LoadingSpinner, 
   ErrorMessage,
   Button,
   Input,
@@ -30,7 +28,7 @@ import {
   SkeletonTable
 } from '../../components/common'
 import { useApi, useDebouncedInput } from '../../hooks'
-import { formatDate, formatRelativeTime } from '../../utils/formatters'
+import { formatRelativeTime } from '../../utils/formatters'
 import { PROJECT_STAGE_LABELS, PROJECT_STATUS_LABELS } from '../../types'
 import type { ProjectListItem, ProjectStatus, ProjectStage, PaginatedResponse } from '../../types'
 
