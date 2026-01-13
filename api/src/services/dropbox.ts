@@ -10,8 +10,7 @@ const logger = createLogger('dropbox')
 
 const DROPBOX_APP_KEY = process.env.DROPBOX_APP_KEY
 const DROPBOX_APP_SECRET = process.env.DROPBOX_APP_SECRET
-const APP_URL = process.env.APP_URL || 'https://approv.co.uk'
-const REDIRECT_URI = `${APP_URL}/dashboard/settings/dropbox/callback`
+const REDIRECT_URI = 'https://approv.co.uk/dashboard/settings/dropbox/callback'
 
 // =============================================================================
 // OAUTH
