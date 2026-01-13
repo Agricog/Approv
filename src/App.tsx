@@ -13,7 +13,8 @@ import {
   ProjectDetail,
   DashboardHome, 
   ProjectList, 
-  AnalyticsDashboard 
+  AnalyticsDashboard,
+  Settings
 } from './pages'
 
 // Approval components
@@ -230,7 +231,9 @@ export default function App() {
               <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
               <Route path="/dashboard/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
               <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
-              <Route path="/dashboard/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/dashboard/settings/dropbox/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/dashboard/settings/monday/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
               {/* Redirects */}
               <Route path="/login" element={<Navigate to="/dashboard" replace />} />
