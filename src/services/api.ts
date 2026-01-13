@@ -3,7 +3,6 @@
  * Centralized API client with CSRF protection, retry logic, and type safety
  * OWASP compliant
  */
-
 import { captureApiError } from '../utils/errorTracking'
 import { isRelativeUrl } from '../utils/validation'
 import type { ApiResult } from '../types'
@@ -12,7 +11,7 @@ import type { ApiResult } from '../types'
 // CONFIGURATION
 // =============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 const DEFAULT_TIMEOUT = 30000
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000
@@ -25,12 +24,32 @@ export interface RequestConfig extends Omit<RequestInit, 'headers'> {
   timeout?: number
   retries?: number
   skipCsrf?: boolean
+  skipAuth?: boolean
   headers?: Record<string, string>
 }
 
 interface CsrfToken {
   token: string
   expiresAt: number
+}
+
+// =============================================================================
+// AUTH TOKEN MANAGEMENT
+// =============================================================================
+
+let authTokenGetter: (() => Promise<string | null>) | null = null
+
+export function setAuthTokenGetter(getter: () => Promise<string | null>): void {
+  authTokenGetter = getter
+}
+
+async function getAuthToken(): Promise<string | null> {
+  if (!authTokenGetter) return null
+  try {
+    return await authTokenGetter()
+  } catch {
+    return null
+  }
 }
 
 // =============================================================================
@@ -46,7 +65,7 @@ async function getCsrfToken(): Promise<string> {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/csrf-token`, {
+    const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
       method: 'GET',
       credentials: 'include'
     })
@@ -85,14 +104,10 @@ function isRetryableError(status: number): boolean {
 }
 
 function buildUrl(endpoint: string, params?: Record<string, string>): string {
-  // Security: Only allow relative URLs
-  if (!isRelativeUrl(endpoint) && !endpoint.startsWith(API_BASE_URL)) {
-    throw new Error('Invalid endpoint: must be relative URL')
-  }
-
-  const url = endpoint.startsWith('/') 
-    ? `${API_BASE_URL}${endpoint}`
-    : `${API_BASE_URL}/${endpoint}`
+  // Build full URL with API base
+  const baseUrl = API_BASE_URL || ''
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const url = `${baseUrl}/api${path}`
 
   if (params && Object.keys(params).length > 0) {
     const searchParams = new URLSearchParams(params)
@@ -114,6 +129,7 @@ export async function apiRequest<T>(
     timeout = DEFAULT_TIMEOUT,
     retries = MAX_RETRIES,
     skipCsrf = false,
+    skipAuth = false,
     method = 'GET',
     headers = {},
     ...restConfig
@@ -133,6 +149,14 @@ export async function apiRequest<T>(
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         ...headers
+      }
+
+      // Add auth token
+      if (!skipAuth) {
+        const token = await getAuthToken()
+        if (token) {
+          requestHeaders['Authorization'] = `Bearer ${token}`
+        }
       }
 
       // Add CSRF token for mutating requests
@@ -232,7 +256,7 @@ export async function apiRequest<T>(
 
   // All retries exhausted
   captureApiError(lastError || new Error('Request failed'), endpoint, method)
-
+  
   return {
     success: false,
     error: {
@@ -298,18 +322,18 @@ export const approvalApi = {
       createdAt: string
       expiresAt: string
       respondedAt: string | null
-    }>(`/approvals/${token}`)
+    }>(`/approvals/${token}`, undefined, { skipAuth: true })
   },
 
   submit(token: string, action: 'approve' | 'request_changes', notes?: string) {
     return api.post<{ success: boolean; message: string }>(`/approvals/${token}/respond`, {
       action,
       notes
-    })
+    }, { skipAuth: true })
   },
 
   trackView(token: string) {
-    return api.post(`/approvals/${token}/view`, undefined, { skipCsrf: true })
+    return api.post(`/approvals/${token}/view`, undefined, { skipCsrf: true, skipAuth: true })
   }
 }
 
@@ -422,7 +446,7 @@ export const portalApi = {
         }>
       }>
       pendingCount: number
-    }>('/portal')
+    }>('/portal', undefined, { skipAuth: true })
   },
 
   getProject(projectId: string) {
@@ -445,7 +469,7 @@ export const portalApi = {
         createdAt: string
         respondedAt: string | null
       }>
-    }>(`/portal/projects/${projectId}`)
+    }>(`/portal/projects/${projectId}`, undefined, { skipAuth: true })
   }
 }
 
