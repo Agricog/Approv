@@ -5,7 +5,7 @@
  */
 
 import type { Request, Response, NextFunction } from 'express'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
 import { createLogger } from '../lib/logger.js'
 import { prisma } from '../lib/prisma.js'
 import { getClientIp } from './security.js'
