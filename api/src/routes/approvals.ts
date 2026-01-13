@@ -24,11 +24,260 @@ import { requireAuth, requireProjectAccess } from '../middleware/auth.js'
 import { 
   sendApprovalConfirmation, 
   sendTeamNotification,
-  sendApprovalReminder 
+  sendApprovalReminder,
+  sendApprovalRequest
 } from '../services/email.js'
 
 const router = Router()
 const logger = createLogger('approvals')
+
+// =============================================================================
+// AUTHENTICATED ROUTES (must come before token routes to avoid conflicts)
+// =============================================================================
+
+/**
+ * POST /api/approvals
+ * Create new approval request (authenticated)
+ */
+router.post(
+  '/',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { organizationId, user } = req
+    const { projectId, stage, stageLabel, deliverableUrl, deliverableName, deliverableType, expiryDays = 14 } = req.body
+
+    if (!projectId || !stage || !stageLabel) {
+      throw new ValidationError('projectId, stage, and stageLabel are required')
+    }
+
+    // Verify project belongs to organization
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        organizationId
+      },
+      include: {
+        client: true
+      }
+    })
+
+    if (!project) {
+      throw new NotFoundError('Project')
+    }
+
+    // Create approval
+    const approval = await prisma.approval.create({
+      data: {
+        projectId,
+        clientId: project.clientId,
+        sentById: user!.id,
+        stage,
+        stageLabel,
+        deliverableUrl: deliverableUrl || null,
+        deliverableName: deliverableName || null,
+        deliverableType: deliverableType || null,
+        expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+      }
+    })
+
+    // Log audit
+    logAudit({
+      action: 'approval.created',
+      entityType: 'approval',
+      entityId: approval.id,
+      organizationId,
+      userId: user!.id,
+      metadata: {
+        projectId,
+        stage,
+        stageLabel
+      }
+    })
+
+    logger.info({
+      approvalId: approval.id,
+      projectId,
+      stage
+    }, 'Approval created')
+
+    // Send approval request email to client
+    sendApprovalRequest({
+      to: project.client.email,
+      clientName: project.client.firstName,
+      projectName: project.name,
+      stageName: stageLabel,
+      approvalToken: approval.token
+    }).catch(err => logger.error({ err }, 'Failed to send approval request email'))
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: approval.id,
+        token: approval.token,
+        approvalUrl: `https://approv.co.uk/approve/${approval.token}`,
+        expiresAt: approval.expiresAt.toISOString()
+      }
+    })
+  })
+)
+
+/**
+ * GET /api/approvals
+ * List approvals (authenticated)
+ */
+router.get(
+  '/',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { organizationId } = req
+    const { status, projectId, page = '1', pageSize = '20' } = req.query
+    
+    const where: any = {
+      project: { organizationId }
+    }
+    
+    if (status) {
+      where.status = status
+    }
+    
+    if (projectId) {
+      where.projectId = projectId
+    }
+    
+    const [approvals, total] = await Promise.all([
+      prisma.approval.findMany({
+        where,
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              reference: true
+            }
+          },
+          client: {
+            select: {
+              firstName: true,
+              lastName: true,
+              company: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (parseInt(page as string) - 1) * parseInt(pageSize as string),
+        take: parseInt(pageSize as string)
+      }),
+      prisma.approval.count({ where })
+    ])
+    
+    res.json({
+      success: true,
+      data: {
+        items: approvals.map(a => ({
+          id: a.id,
+          projectId: a.project.id,
+          projectName: a.project.name,
+          projectReference: a.project.reference,
+          clientName: `${a.client.firstName} ${a.client.lastName}`,
+          clientCompany: a.client.company,
+          stage: a.stage,
+          stageLabel: a.stageLabel,
+          status: a.status,
+          createdAt: a.createdAt.toISOString(),
+          expiresAt: a.expiresAt.toISOString(),
+          respondedAt: a.respondedAt?.toISOString() || null,
+          viewCount: a.viewCount,
+          reminderCount: a.reminderCount
+        })),
+        total,
+        page: parseInt(page as string),
+        pageSize: parseInt(pageSize as string),
+        totalPages: Math.ceil(total / parseInt(pageSize as string))
+      }
+    })
+  })
+)
+
+/**
+ * POST /api/approvals/:id/remind
+ * Send reminder for pending approval (authenticated)
+ */
+router.post(
+  '/:id/remind',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params
+    const { organizationId, user } = req
+    
+    const approval = await prisma.approval.findFirst({
+      where: {
+        id,
+        project: { organizationId },
+        status: 'PENDING'
+      },
+      include: {
+        client: true,
+        project: true
+      }
+    })
+    
+    if (!approval) {
+      throw new NotFoundError('Approval')
+    }
+    
+    // Check if expired
+    if (approval.expiresAt < new Date()) {
+      throw new AppError(400, 'APPROVAL_EXPIRED', 'Cannot send reminder for expired approval')
+    }
+    
+    // Calculate days pending
+    const daysPending = Math.floor((Date.now() - approval.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Send reminder email
+    await sendApprovalReminder({
+      to: approval.client.email,
+      clientName: approval.client.firstName,
+      projectName: approval.project.name,
+      stageName: approval.stageLabel,
+      approvalToken: approval.token,
+      daysPending
+    })
+    
+    // Update reminder count
+    await prisma.approval.update({
+      where: { id },
+      data: {
+        reminderCount: { increment: 1 },
+        lastReminderAt: new Date()
+      }
+    })
+    
+    // Create reminder record
+    await prisma.reminder.create({
+      data: {
+        type: approval.reminderCount === 0 ? 'FIRST' : approval.reminderCount === 1 ? 'SECOND' : 'ESCALATION',
+        channel: 'EMAIL',
+        approvalId: id,
+        sentById: user!.id,
+        scheduledFor: new Date(),
+        sentAt: new Date()
+      }
+    })
+    
+    logger.info({
+      approvalId: id,
+      reminderCount: approval.reminderCount + 1
+    }, 'Reminder sent')
+    
+    res.json({
+      success: true,
+      data: {
+        message: 'Reminder sent successfully',
+        reminderCount: approval.reminderCount + 1
+      }
+    })
+  })
+)
 
 // =============================================================================
 // PUBLIC ROUTES (Token-based access)
@@ -308,168 +557,6 @@ router.post(
     }).catch(() => {})
     
     res.status(204).send()
-  })
-)
-
-// =============================================================================
-// AUTHENTICATED ROUTES
-// =============================================================================
-
-/**
- * GET /api/approvals
- * List approvals (authenticated)
- */
-router.get(
-  '/',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const { organizationId } = req
-    const { status, projectId, page = '1', pageSize = '20' } = req.query
-    
-    const where: any = {
-      project: { organizationId }
-    }
-    
-    if (status) {
-      where.status = status
-    }
-    
-    if (projectId) {
-      where.projectId = projectId
-    }
-    
-    const [approvals, total] = await Promise.all([
-      prisma.approval.findMany({
-        where,
-        include: {
-          project: {
-            select: {
-              id: true,
-              name: true,
-              reference: true
-            }
-          },
-          client: {
-            select: {
-              firstName: true,
-              lastName: true,
-              company: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (parseInt(page as string) - 1) * parseInt(pageSize as string),
-        take: parseInt(pageSize as string)
-      }),
-      prisma.approval.count({ where })
-    ])
-    
-    res.json({
-      success: true,
-      data: {
-        items: approvals.map(a => ({
-          id: a.id,
-          projectId: a.project.id,
-          projectName: a.project.name,
-          projectReference: a.project.reference,
-          clientName: `${a.client.firstName} ${a.client.lastName}`,
-          clientCompany: a.client.company,
-          stage: a.stage,
-          stageLabel: a.stageLabel,
-          status: a.status,
-          createdAt: a.createdAt.toISOString(),
-          expiresAt: a.expiresAt.toISOString(),
-          respondedAt: a.respondedAt?.toISOString() || null,
-          viewCount: a.viewCount,
-          reminderCount: a.reminderCount
-        })),
-        total,
-        page: parseInt(page as string),
-        pageSize: parseInt(pageSize as string),
-        totalPages: Math.ceil(total / parseInt(pageSize as string))
-      }
-    })
-  })
-)
-
-/**
- * POST /api/approvals/:id/remind
- * Send reminder for pending approval (authenticated)
- */
-router.post(
-  '/:id/remind',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const { id } = req.params
-    const { organizationId, user } = req
-    
-    const approval = await prisma.approval.findFirst({
-      where: {
-        id,
-        project: { organizationId },
-        status: 'PENDING'
-      },
-      include: {
-        client: true,
-        project: true
-      }
-    })
-    
-    if (!approval) {
-      throw new NotFoundError('Approval')
-    }
-    
-    // Check if expired
-    if (approval.expiresAt < new Date()) {
-      throw new AppError(400, 'APPROVAL_EXPIRED', 'Cannot send reminder for expired approval')
-    }
-    
-    // Calculate days pending
-    const daysPending = Math.floor((Date.now() - approval.createdAt.getTime()) / (1000 * 60 * 60 * 24))
-    
-    // Send reminder email
-    await sendApprovalReminder({
-      to: approval.client.email,
-      clientName: approval.client.firstName,
-      projectName: approval.project.name,
-      stageName: approval.stageLabel,
-      approvalToken: approval.token,
-      daysPending
-    })
-    
-    // Update reminder count
-    await prisma.approval.update({
-      where: { id },
-      data: {
-        reminderCount: { increment: 1 },
-        lastReminderAt: new Date()
-      }
-    })
-    
-    // Create reminder record
-    await prisma.reminder.create({
-      data: {
-        type: approval.reminderCount === 0 ? 'FIRST' : approval.reminderCount === 1 ? 'SECOND' : 'ESCALATION',
-        channel: 'EMAIL',
-        approvalId: id,
-        sentById: user!.id,
-        scheduledFor: new Date(),
-        sentAt: new Date()
-      }
-    })
-    
-    logger.info({
-      approvalId: id,
-      reminderCount: approval.reminderCount + 1
-    }, 'Reminder sent')
-    
-    res.json({
-      success: true,
-      data: {
-        message: 'Reminder sent successfully',
-        reminderCount: approval.reminderCount + 1
-      }
-    })
   })
 )
 
