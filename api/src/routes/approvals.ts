@@ -21,6 +21,11 @@ import {
 } from '../middleware/index.js'
 import { approvalRateLimiter } from '../middleware/rateLimit.js'
 import { requireAuth, requireProjectAccess } from '../middleware/auth.js'
+import { 
+  sendApprovalConfirmation, 
+  sendTeamNotification,
+  sendApprovalReminder 
+} from '../services/email.js'
 
 const router = Router()
 const logger = createLogger('approvals')
@@ -151,7 +156,12 @@ router.post(
           select: {
             id: true,
             name: true,
-            organizationId: true
+            organizationId: true,
+            organization: {
+              select: {
+                name: true
+              }
+            }
           }
         },
         client: {
@@ -227,7 +237,34 @@ router.post(
       ip: getClientIp(req)
     }, 'Approval response submitted')
     
-    // TODO: Trigger notifications (email to team, Monday.com update, etc.)
+    // Send confirmation email to client
+    sendApprovalConfirmation({
+      to: approval.client.email,
+      clientName: approval.client.firstName,
+      projectName: approval.project.name,
+      stageName: approval.stageLabel,
+      approvedAt: new Date()
+    }).catch(err => logger.error({ err }, 'Failed to send confirmation email'))
+    
+    // Get team emails and notify
+    const teamMembers = await prisma.user.findMany({
+      where: { 
+        organizationId: approval.project.organizationId,
+        isActive: true
+      },
+      select: { email: true }
+    })
+    
+    if (teamMembers.length > 0) {
+      sendTeamNotification({
+        to: teamMembers.map(m => m.email),
+        projectName: approval.project.name,
+        stageName: approval.stageLabel,
+        clientName: `${approval.client.firstName} ${approval.client.lastName}`,
+        action: action === 'approve' ? 'approved' : 'changes_requested',
+        notes: notes || undefined
+      }).catch(err => logger.error({ err }, 'Failed to send team notification'))
+    }
     
     res.json({
       success: true,
@@ -387,6 +424,19 @@ router.post(
       throw new AppError(400, 'APPROVAL_EXPIRED', 'Cannot send reminder for expired approval')
     }
     
+    // Calculate days pending
+    const daysPending = Math.floor((Date.now() - approval.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+    
+    // Send reminder email
+    await sendApprovalReminder({
+      to: approval.client.email,
+      clientName: approval.client.firstName,
+      projectName: approval.project.name,
+      stageName: approval.stageLabel,
+      approvalToken: approval.token,
+      daysPending
+    })
+    
     // Update reminder count
     await prisma.approval.update({
       where: { id },
@@ -407,8 +457,6 @@ router.post(
         sentAt: new Date()
       }
     })
-    
-    // TODO: Actually send the reminder email
     
     logger.info({
       approvalId: id,
