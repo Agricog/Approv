@@ -25,7 +25,6 @@ model Organization {
   dropboxRefreshToken  String?
   dropboxTokenExpiry   DateTime?
   dropboxOAuthState    String?
-  defaultExpiryDays    Int      @default(14)
   defaultExpiryDays Int      @default(14)
   reminderDays      Int[]    @default([3, 7, 10])
   createdAt         DateTime @default(now())
