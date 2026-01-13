@@ -18,6 +18,7 @@ import { rateLimiter } from './middleware/rateLimit.js'
 import { csrfProtection } from './middleware/csrf.js'
 import { uploadRoutes } from './routes/uploads.js'
 import { dropboxRoutes } from './routes/dropbox.js'
+import { mondayRoutes } from './routes/monday.js'
 import { requestValidator } from './middleware/validation.js'
 
 // Routes
@@ -202,6 +203,7 @@ app.use('/api/dashboard', csrfProtection, dashboardRoutes)
 app.use('/api/portal', csrfProtection, portalRoutes)
 app.use('/api/uploads', csrfProtection, uploadRoutes)
 app.use('/api/dropbox', csrfProtection, dropboxRoutes)
+app.use('/api/monday', csrfProtection, mondayRoutes)
 app.use('/api/notifications', csrfProtection, notificationRoutes)
 
 // =============================================================================
