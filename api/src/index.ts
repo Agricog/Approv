@@ -34,11 +34,15 @@ import { notificationRoutes } from './routes/notifications.js'
 
 const PORT = process.env.PORT || 3001
 const NODE_ENV = process.env.NODE_ENV || 'development'
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [
   'http://localhost:5173',
   'https://approv.co.uk',
-  'https://www.approv.co.uk'
+  'https://www.approv.co.uk',
+  'https://approv-production.up.railway.app'
 ]
+
+// Log allowed origins on startup
+console.log('Allowed origins:', ALLOWED_ORIGINS)
 
 const logger = createLogger('server')
 
