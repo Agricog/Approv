@@ -6,15 +6,13 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { 
-  Settings as SettingsIcon, 
   Link2, 
   Unlink,
-  ExternalLink,
   CheckCircle,
   Loader2
 } from 'lucide-react'
 import { DashboardLayout, PageHeader, ContentCard } from '../../components/layout'
-import { Button, ErrorMessage } from '../../components/common'
+import { Button } from '../../components/common'
 import { useApi } from '../../hooks'
 
 // =============================================================================
@@ -60,7 +58,7 @@ export function Settings() {
 // =============================================================================
 
 function DropboxIntegration() {
-  const { data, isLoading, error, execute } = useApi<IntegrationStatus>()
+  const { data, isLoading, execute } = useApi<IntegrationStatus>()
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
@@ -171,7 +169,7 @@ function DropboxIntegration() {
 // =============================================================================
 
 function MondayIntegration() {
-  const { data, isLoading, error, execute } = useApi<IntegrationStatus>()
+  const { data, isLoading, execute } = useApi<IntegrationStatus>()
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
 
