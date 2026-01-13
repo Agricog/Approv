@@ -16,6 +16,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { securityHeaders } from './middleware/security.js'
 import { rateLimiter } from './middleware/rateLimit.js'
 import { csrfProtection } from './middleware/csrf.js'
+import { uploadRoutes } from './routes/uploads.js'
 import { requestValidator } from './middleware/validation.js'
 
 // Routes
@@ -198,6 +199,7 @@ app.use('/api/approvals', csrfProtection, approvalRoutes)
 app.use('/api/projects', csrfProtection, projectRoutes)
 app.use('/api/dashboard', csrfProtection, dashboardRoutes)
 app.use('/api/portal', csrfProtection, portalRoutes)
+app.use('/api/uploads', csrfProtection, uploadRoutes)
 app.use('/api/notifications', csrfProtection, notificationRoutes)
 
 // =============================================================================
