@@ -93,17 +93,57 @@ export async function requireAuth(
     }
     
     // Get user from database
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { externalId: clerkUser.id },
       include: { organization: true }
     })
     
+    // Auto-create user if not found
     if (!user) {
-      logger.warn({
-        externalId: clerkUser.id
-      }, 'User not found in database')
+      logger.info({
+        externalId: clerkUser.id,
+        email: clerkUser.emailAddresses[0]?.emailAddress
+      }, 'Creating new user from Clerk')
       
-      throw new AuthenticationError('User not found')
+      const email = clerkUser.emailAddresses[0]?.emailAddress || ''
+      const firstName = clerkUser.firstName || 'User'
+      const lastName = clerkUser.lastName || ''
+      
+      // Create organization and user together
+      const organization = await prisma.organization.create({
+        data: {
+          name: `${firstName}'s Practice`,
+          slug: `org-${clerkUser.id.substring(0, 8)}`,
+          plan: 'FREE',
+          users: {
+            create: {
+              externalId: clerkUser.id,
+              email: email,
+              firstName: firstName,
+              lastName: lastName,
+              role: 'OWNER',
+              isActive: true
+            }
+          }
+        },
+        include: {
+          users: true
+        }
+      })
+      
+      user = await prisma.user.findUnique({
+        where: { externalId: clerkUser.id },
+        include: { organization: true }
+      })
+      
+      if (!user) {
+        throw new AuthenticationError('Failed to create user')
+      }
+      
+      logger.info({
+        userId: user.id,
+        organizationId: organization.id
+      }, 'New user and organization created')
     }
     
     if (!user.isActive) {
