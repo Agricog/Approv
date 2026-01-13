@@ -69,7 +69,11 @@ export async function exchangeCodeForTokens(code: string): Promise<{
       return null
     }
 
-    const data = await response.json()
+    const data = await response.json() as {
+      access_token: string
+      refresh_token: string
+      expires_in: number
+    }
     
     return {
       accessToken: data.access_token,
@@ -112,7 +116,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
       return null
     }
 
-    const data = await response.json()
+    const data = await response.json() as {
+      access_token: string
+      expires_in: number
+    }
     
     return {
       accessToken: data.access_token,
