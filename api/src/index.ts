@@ -17,6 +17,7 @@ import { securityHeaders } from './middleware/security.js'
 import { rateLimiter } from './middleware/rateLimit.js'
 import { csrfProtection } from './middleware/csrf.js'
 import { uploadRoutes } from './routes/uploads.js'
+import { dropboxRoutes } from './routes/dropbox.js'
 import { requestValidator } from './middleware/validation.js'
 
 // Routes
@@ -200,6 +201,7 @@ app.use('/api/projects', csrfProtection, projectRoutes)
 app.use('/api/dashboard', csrfProtection, dashboardRoutes)
 app.use('/api/portal', csrfProtection, portalRoutes)
 app.use('/api/uploads', csrfProtection, uploadRoutes)
+app.use('/api/dropbox', csrfProtection, dropboxRoutes)
 app.use('/api/notifications', csrfProtection, notificationRoutes)
 
 // =============================================================================
