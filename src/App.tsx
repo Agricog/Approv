@@ -2,8 +2,8 @@
  * App Component
  * Main application router with all routes
  */
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react'
 import * as Sentry from '@sentry/react'
 
 // Pages
@@ -37,6 +37,34 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 function PageTracker({ children }: { children: React.ReactNode }) {
   usePageTracking()
   return <>{children}</>
+}
+
+// =============================================================================
+// PROTECTED ROUTE WRAPPER
+// =============================================================================
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <SignedIn>{children}</SignedIn>
+      <SignedOut>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Sign in to Approv</h1>
+              <p className="text-gray-600 mt-1">Access your approval dashboard</p>
+            </div>
+            <SignIn routing="hash" />
+          </div>
+        </div>
+      </SignedOut>
+    </>
+  )
 }
 
 // =============================================================================
@@ -174,16 +202,16 @@ export default function App() {
             <Route path="/portal" element={<PortalHome />} />
             <Route path="/portal/project/:projectId" element={<ProjectDetail />} />
 
-            {/* Dashboard */}
-            <Route path="/dashboard" element={<DashboardHome />} />
-            <Route path="/dashboard/projects" element={<ProjectList />} />
-            <Route path="/dashboard/projects/:projectId" element={<ProjectList />} />
-            <Route path="/dashboard/approvals" element={<ApprovalsPage />} />
-            <Route path="/dashboard/analytics" element={<AnalyticsDashboard />} />
-            <Route path="/dashboard/team" element={<TeamPage />} />
-            <Route path="/dashboard/activity" element={<ActivityPage />} />
-            <Route path="/dashboard/notifications" element={<ActivityPage />} />
-            <Route path="/dashboard/settings" element={<SettingsPage />} />
+            {/* Dashboard (protected) */}
+            <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+            <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+            <Route path="/dashboard/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+            <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
+            <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
+            <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+            <Route path="/dashboard/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+            <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+            <Route path="/dashboard/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
             {/* Redirects */}
             <Route path="/login" element={<Navigate to="/dashboard" replace />} />
