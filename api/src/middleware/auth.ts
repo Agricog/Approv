@@ -70,7 +70,7 @@ export async function requireAuth(
     // Verify token with Clerk
     let clerkUser
     try {
-      const sessionClaims = await clerk.verifyToken(token)
+      const sessionClaims = await clerk.authenticateRequest(token)
       clerkUser = await clerk.users.getUser(sessionClaims.sub)
     } catch (error) {
       logger.warn({
