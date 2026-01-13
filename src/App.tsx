@@ -90,17 +90,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // PLACEHOLDER PAGES
 // =============================================================================
 
-function SettingsPage() {
-  return (
-    <DashboardLayout>
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Settings page coming soon.</p>
-      </div>
-    </DashboardLayout>
-  )
-}
-
 function TeamPage() {
   return (
     <DashboardLayout>
