@@ -1,3 +1,8 @@
+// =============================================================================
+// APPROV DATABASE SCHEMA
+// Prisma + Neon PostgreSQL
+// =============================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +12,10 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+// =============================================================================
+// ORGANIZATION & USERS
+// =============================================================================
 
 model Organization {
   id                String   @id @default(cuid())
@@ -70,6 +79,10 @@ enum UserRole {
   VIEWER
 }
 
+// =============================================================================
+// CLIENTS
+// =============================================================================
+
 model Client {
   id                String    @id @default(cuid())
   email             String
@@ -92,6 +105,10 @@ model Client {
   @@index([portalToken])
   @@map("clients")
 }
+
+// =============================================================================
+// PROJECTS
+// =============================================================================
 
 model Project {
   id                   String        @id @default(cuid())
@@ -158,6 +175,10 @@ enum ProjectMemberRole {
   VIEWER
 }
 
+// =============================================================================
+// APPROVALS
+// =============================================================================
+
 model Approval {
   id                String          @id @default(cuid())
   token             String          @unique @default(cuid())
@@ -208,6 +229,10 @@ enum DeliverableType {
   LINK
 }
 
+// =============================================================================
+// DOCUMENTS
+// =============================================================================
+
 model Document {
   id         String       @id @default(cuid())
   name       String
@@ -231,6 +256,10 @@ enum DocumentType {
   CONTRACT
   OTHER
 }
+
+// =============================================================================
+// REMINDERS & NOTIFICATIONS
+// =============================================================================
 
 model Reminder {
   id            String              @id @default(cuid())
@@ -265,6 +294,10 @@ enum NotificationChannel {
   SLACK
 }
 
+// =============================================================================
+// EMAIL TEMPLATES
+// =============================================================================
+
 model EmailTemplate {
   id             String       @id @default(cuid())
   name           String
@@ -282,6 +315,10 @@ model EmailTemplate {
   @@unique([organizationId, slug])
   @@map("email_templates")
 }
+
+// =============================================================================
+// AUDIT LOG
+// =============================================================================
 
 model AuditLog {
   id             String       @id @default(cuid())
@@ -308,6 +345,10 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// =============================================================================
+// SESSIONS & SECURITY
+// =============================================================================
 
 model CsrfToken {
   id        String   @id @default(cuid())
