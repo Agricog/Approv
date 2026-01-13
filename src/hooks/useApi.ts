@@ -165,9 +165,13 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       }
 
       // Parse successful response
-      const data = await response.json() as T
-      setState({ data, isLoading: false, error: null })
-      return data
+const responseData = await response.json()
+// Unwrap { success: true, data: ... } format
+const data = (responseData.success && responseData.data !== undefined) 
+  ? responseData.data as T 
+  : responseData as T
+setState({ data, isLoading: false, error: null })
+return data
 
     } catch (err) {
       clearTimeout(timeoutId)
