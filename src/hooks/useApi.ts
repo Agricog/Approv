@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from 'react'
+import { useAuth } from '@clerk/clerk-react'
 import { captureApiError, addApiBreadcrumb } from '../utils/errorTracking'
 
 // =============================================================================
@@ -34,6 +35,7 @@ export interface FetchOptions {
   body?: Record<string, unknown>
   headers?: Record<string, string>
   timeout?: number
+  skipAuth?: boolean
 }
 
 interface UseApiReturn<T> {
@@ -56,6 +58,8 @@ const RETRY_STATUS_CODES = [408, 429, 503, 504]
 // =============================================================================
 
 export function useApi<T = unknown>(): UseApiReturn<T> {
+  const { getToken } = useAuth()
+  
   const [state, setState] = useState<ApiState<T>>({
     data: null,
     isLoading: false,
@@ -80,7 +84,8 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       method = 'GET',
       body,
       headers = {},
-      timeout = DEFAULT_TIMEOUT
+      timeout = DEFAULT_TIMEOUT,
+      skipAuth = false
     } = options
 
     // Build full URL
@@ -94,6 +99,18 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       const requestHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
         ...headers
+      }
+
+      // Add auth token
+      if (!skipAuth) {
+        try {
+          const token = await getToken()
+          if (token) {
+            requestHeaders['Authorization'] = `Bearer ${token}`
+          }
+        } catch {
+          // Continue without token
+        }
       }
 
       const response = await fetch(url, {
@@ -185,7 +202,7 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       setState(prev => ({ ...prev, error, isLoading: false }))
       return null
     }
-  }, [])
+  }, [getToken])
 
   return {
     data: state.data,
