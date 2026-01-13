@@ -1,0 +1,114 @@
+version: '3.8'
+
+# =============================================================================
+# APPROV LOCAL DEVELOPMENT
+# Run with: docker-compose up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (local dev only - use Neon in production)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: approv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: approv
+      POSTGRES_PASSWORD: approv_dev_password
+      POSTGRES_DB: approv
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U approv"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis (for rate limiting & caching)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: approv-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Mailhog (local email testing)
+  # ---------------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: approv-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    logging:
+      driver: none
+
+  # ---------------------------------------------------------------------------
+  # API Server (optional - can also run with npm run dev)
+  # ---------------------------------------------------------------------------
+  # api:
+  #   build:
+  #     context: ./api
+  #     dockerfile: Dockerfile
+  #   container_name: approv-api
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     NODE_ENV: development
+  #     PORT: 3001
+  #     DATABASE_URL: postgresql://approv:approv_dev_password@postgres:5432/approv
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./api:/app
+  #     - /app/node_modules
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# =============================================================================
+# USAGE
+# =============================================================================
+#
+# Start services:
+#   docker-compose up -d
+#
+# View logs:
+#   docker-compose logs -f
+#
+# Stop services:
+#   docker-compose down
+#
+# Reset database:
+#   docker-compose down -v
+#   docker-compose up -d
+#
+# Connect to database:
+#   DATABASE_URL=postgresql://approv:approv_dev_password@localhost:5432/approv
+#
+# View emails:
+#   http://localhost:8025
+#
+# =============================================================================
