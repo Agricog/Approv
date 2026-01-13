@@ -10,8 +10,7 @@ const logger = createLogger('monday')
 
 const MONDAY_CLIENT_ID = process.env.MONDAY_CLIENT_ID
 const MONDAY_CLIENT_SECRET = process.env.MONDAY_CLIENT_SECRET
-const APP_URL = process.env.APP_URL || 'https://approv.co.uk'
-const REDIRECT_URI = `${APP_URL}/dashboard/settings/monday/callback`
+const REDIRECT_URI = 'https://approv.co.uk/dashboard/settings/monday/callback'
 
 // =============================================================================
 // OAUTH
