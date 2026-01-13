@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express'
-import crypto from 'crypto'
+import * as crypto from 'crypto'
 import { prisma } from '../lib/prisma.js'
 import { createLogger, logAudit } from '../lib/logger.js'
 import { asyncHandler, AppError } from '../middleware/errorHandler.js'
