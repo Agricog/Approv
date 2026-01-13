@@ -4,7 +4,6 @@
  * OWASP compliant
  */
 import { captureApiError } from '../utils/errorTracking'
-import { isRelativeUrl } from '../utils/validation'
 import type { ApiResult } from '../types'
 
 // =============================================================================
