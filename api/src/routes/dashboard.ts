@@ -446,7 +446,7 @@ async function getByStageBreakdown(organizationId: string, startDate: Date, endD
       const approvals = await prisma.approval.findMany({
         where: {
           project: { organizationId },
-          stage,
+          stage: stage as 'INITIAL_DRAWINGS' | 'DETAILED_DESIGN' | 'PLANNING_PACK' | 'FINAL_APPROVAL',
           createdAt: { gte: startDate, lte: endDate }
         },
         select: {
