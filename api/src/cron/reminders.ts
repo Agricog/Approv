@@ -88,16 +88,8 @@ async function processReminders() {
           }
         })
 
-        // Create reminder record
-        await prisma.reminder.create({
-          data: {
-            type: threshold.type,
-            channel: 'EMAIL',
-            approvalId: approval.id,
-            scheduledFor: new Date(),
-            sentAt: new Date()
-          }
-        })
+        // Note: Reminder record not created for automated sends
+        // as sentById is required. Track via approval.reminderCount instead.
 
         sentCount++
         logger.info({
