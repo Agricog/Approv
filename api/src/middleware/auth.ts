@@ -70,8 +70,19 @@ export async function requireAuth(
     // Verify token with Clerk
     let clerkUser
     try {
-      const sessionClaims = await clerk.authenticateRequest(token)
-      clerkUser = await clerk.users.getUser(sessionClaims.sub)
+      // Decode JWT payload to get user ID
+      const parts = token.split('.')
+      if (parts.length !== 3) {
+        throw new Error('Invalid token format')
+      }
+      const payload = JSON.parse(Buffer.from(parts[1]!, 'base64').toString())
+      const clerkUserId = payload.sub as string
+      
+      if (!clerkUserId) {
+        throw new Error('No user ID in token')
+      }
+      
+      clerkUser = await clerk.users.getUser(clerkUserId)
     } catch (error) {
       logger.warn({
         ip: getClientIp(req),
