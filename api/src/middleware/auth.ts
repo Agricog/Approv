@@ -111,10 +111,9 @@ export async function requireAuth(
       
       // Create organization and user together
       const organization = await prisma.organization.create({
-        data: {
-          name: `${firstName}'s Practice`,
-          slug: `org-${clerkUser.id.substring(0, 8)}`,
-          plan: 'FREE',
+  data: {
+    name: `${firstName}'s Practice`,
+    slug: `org-${clerkUser.id.substring(0, 8)}`,
           users: {
             create: {
               externalId: clerkUser.id,
