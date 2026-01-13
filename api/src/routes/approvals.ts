@@ -104,13 +104,7 @@ router.post(
     }, 'Approval created')
 
     // Send approval request email to client
-    sendApprovalRequest({
-      to: project.client.email,
-      clientName: project.client.firstName,
-      projectName: project.name,
-      stageName: stageLabel,
-      approvalToken: approval.token,
-      organizationName: project.organization?.name || 'Your architect'
+    sendApprovalRequest(
     }).catch(err => logger.error({ err }, 'Failed to send approval request email'))
       to: project.client.email,
       clientName: project.client.firstName,
