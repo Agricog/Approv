@@ -205,7 +205,7 @@ app.use(Sentry.Handlers.errorHandler({
   shouldHandleError(error) {
     // Report 4xx and 5xx errors
     if (error.status) {
-      return error.status >= 400
+      return Number(error.status) >= 400
     }
     return true
   }
