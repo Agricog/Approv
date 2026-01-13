@@ -3,7 +3,7 @@
  * Main application router with all routes
  */
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { SignedIn, SignedOut, SignIn, UserButton } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignIn, } from '@clerk/clerk-react'
 import * as Sentry from '@sentry/react'
 
 // Pages
