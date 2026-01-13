@@ -10,7 +10,7 @@ import type { ApiResult } from '../types'
 // CONFIGURATION
 // =============================================================================
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'
 const DEFAULT_TIMEOUT = 30000
 const MAX_RETRIES = 3
 const RETRY_DELAY = 1000
