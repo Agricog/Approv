@@ -2,8 +2,9 @@
  * App Component
  * Main application router with all routes
  */
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { SignedIn, SignedOut, SignIn, } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignIn, useAuth } from '@clerk/clerk-react'
 import * as Sentry from '@sentry/react'
 
 // Pages
@@ -24,11 +25,28 @@ import { DashboardLayout } from './components/layout'
 // Analytics
 import { usePageTracking } from './hooks/useAnalytics'
 
+// API
+import { setAuthTokenGetter } from './services/api'
+
 // =============================================================================
 // SENTRY WRAPPED ROUTES
 // =============================================================================
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+
+// =============================================================================
+// AUTH TOKEN PROVIDER
+// =============================================================================
+
+function AuthTokenProvider({ children }: { children: React.ReactNode }) {
+  const { getToken } = useAuth()
+  
+  useEffect(() => {
+    setAuthTokenGetter(getToken)
+  }, [getToken])
+  
+  return <>{children}</>
+}
 
 // =============================================================================
 // PAGE TRACKER COMPONENT
@@ -187,40 +205,42 @@ export default function App() {
         Skip to main content
       </a>
       
-      <PageTracker>
-        <main id="main-content">
-          <SentryRoutes>
-            {/* Home */}
-            <Route path="/" element={<HomePage />} />
+      <AuthTokenProvider>
+        <PageTracker>
+          <main id="main-content">
+            <SentryRoutes>
+              {/* Home */}
+              <Route path="/" element={<HomePage />} />
 
-            {/* Approval flow (public, token-based) */}
-            <Route path="/approve/:token" element={<ApprovalPage />} />
-            <Route path="/approve/:token/confirmed" element={<ApprovalPage />} />
-            <Route path="/approve/:token/changes" element={<ApprovalPage />} />
+              {/* Approval flow (public, token-based) */}
+              <Route path="/approve/:token" element={<ApprovalPage />} />
+              <Route path="/approve/:token/confirmed" element={<ApprovalPage />} />
+              <Route path="/approve/:token/changes" element={<ApprovalPage />} />
 
-            {/* Client portal */}
-            <Route path="/portal" element={<PortalHome />} />
-            <Route path="/portal/project/:projectId" element={<ProjectDetail />} />
+              {/* Client portal */}
+              <Route path="/portal" element={<PortalHome />} />
+              <Route path="/portal/project/:projectId" element={<ProjectDetail />} />
 
-            {/* Dashboard (protected) */}
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-            <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
-            <Route path="/dashboard/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
-            <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
-            <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
-            <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
-            <Route path="/dashboard/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
-            <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
-            <Route path="/dashboard/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              {/* Dashboard (protected) */}
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+              <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+              <Route path="/dashboard/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+              <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
+              <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+              <Route path="/dashboard/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+              <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+              <Route path="/dashboard/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
-            {/* Redirects */}
-            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
-            
-            {/* 404 */}
-            <Route path="*" element={<NotFoundPage />} />
-          </SentryRoutes>
-        </main>
-      </PageTracker>
+              {/* Redirects */}
+              <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+              
+              {/* 404 */}
+              <Route path="*" element={<NotFoundPage />} />
+            </SentryRoutes>
+          </main>
+        </PageTracker>
+      </AuthTokenProvider>
     </BrowserRouter>
   )
 }
