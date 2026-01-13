@@ -57,7 +57,10 @@ router.post(
         organizationId
       },
       include: {
-        client: true
+        client: true,
+        organization: {
+          select: { name: true }
+        }
       }
     })
 
@@ -102,6 +105,13 @@ router.post(
 
     // Send approval request email to client
     sendApprovalRequest({
+      to: project.client.email,
+      clientName: project.client.firstName,
+      projectName: project.name,
+      stageName: stageLabel,
+      approvalToken: approval.token,
+      organizationName: project.organization?.name || 'Your architect'
+    }).catch(err => logger.error({ err }, 'Failed to send approval request email'))
       to: project.client.email,
       clientName: project.client.firstName,
       projectName: project.name,
