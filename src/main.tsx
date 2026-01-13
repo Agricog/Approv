@@ -1,9 +1,17 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HelmetProvider } from 'react-helmet-async'
+import { ClerkProvider } from '@clerk/clerk-react'
 import * as Sentry from '@sentry/react'
 import App from './App'
 import './index.css'
+
+// Clerk publishable key
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+if (!CLERK_PUBLISHABLE_KEY) {
+  console.warn('Missing VITE_CLERK_PUBLISHABLE_KEY - authentication will not work')
+}
 
 // Initialize Sentry error tracking
 if (import.meta.env.VITE_SENTRY_DSN) {
@@ -97,13 +105,11 @@ function ErrorFallback({ error }: ErrorFallbackProps) {
 
 // Get root element with type safety
 const container = document.getElementById('root')
-
 if (!container) {
   throw new Error('Root element not found. Check index.html has <div id="root"></div>')
 }
 
 const root = createRoot(container)
-
 root.render(
   <StrictMode>
     <Sentry.ErrorBoundary 
@@ -111,9 +117,11 @@ root.render(
         <ErrorFallback error={error instanceof Error ? error : new Error(String(error))} />
       )}
     >
-      <HelmetProvider>
-        <App />
-      </HelmetProvider>
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY || ''}>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </ClerkProvider>
     </Sentry.ErrorBoundary>
   </StrictMode>
 )
