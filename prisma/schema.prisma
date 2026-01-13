@@ -1,1 +1,374 @@
+// =============================================================================
+// APPROV DATABASE SCHEMA
+// Prisma + Neon PostgreSQL
+// =============================================================================
 
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =============================================================================
+// ORGANIZATION & USERS
+// =============================================================================
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  domain            String?  @unique
+  logo              String?
+  primaryColor      String   @default("#16a34a")
+  mondayBoardId     String?
+  mondayApiToken    String?
+  mondayWebhookId   String?
+  slackWorkspaceId  String?
+  slackBotToken     String?
+  slackChannelId    String?
+  defaultExpiryDays Int      @default(14)
+  reminderDays      Int[]    @default([3, 7, 10])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  users             User[]
+  projects          Project[]
+  clients           Client[]
+  emailTemplates    EmailTemplate[]
+  auditLogs         AuditLog[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  externalId         String    @unique
+  email              String
+  firstName          String
+  lastName           String
+  avatarUrl          String?
+  role               UserRole  @default(MEMBER)
+  emailNotifications Boolean   @default(true)
+  slackNotifications Boolean   @default(true)
+  dailyDigest        Boolean   @default(true)
+  isActive           Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects           ProjectMember[]
+  approvalsSent      Approval[] @relation("SentBy")
+  reminders          Reminder[]
+  auditLogs          AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([externalId])
+  @@index([organizationId])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// =============================================================================
+// CLIENTS
+// =============================================================================
+
+model Client {
+  id                String    @id @default(cuid())
+  email             String
+  firstName         String
+  lastName          String
+  company           String?
+  phone             String?
+  portalToken       String    @unique @default(cuid())
+  portalTokenExpiry DateTime?
+  lastPortalAccess  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects          Project[]
+  approvals         Approval[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([portalToken])
+  @@map("clients")
+}
+
+// =============================================================================
+// PROJECTS
+// =============================================================================
+
+model Project {
+  id                   String        @id @default(cuid())
+  name                 String
+  reference            String
+  description          String?
+  address              String?
+  status               ProjectStatus @default(ACTIVE)
+  currentStage         ProjectStage  @default(INITIAL_DRAWINGS)
+  mondayItemId         String?
+  mondayLastSyncAt     DateTime?
+  startDate            DateTime      @default(now())
+  targetCompletionDate DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  organizationId       String
+  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId             String
+  client               Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  members              ProjectMember[]
+  approvals            Approval[]
+  documents            Document[]
+  auditLogs            AuditLog[]
+
+  @@unique([organizationId, reference])
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([status])
+  @@index([mondayItemId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String            @id @default(cuid())
+  role      ProjectMemberRole @default(MEMBER)
+  createdAt DateTime          @default(now())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectStage {
+  INITIAL_DRAWINGS
+  DETAILED_DESIGN
+  PLANNING_PACK
+  FINAL_APPROVAL
+}
+
+enum ProjectMemberRole {
+  LEAD
+  MEMBER
+  VIEWER
+}
+
+// =============================================================================
+// APPROVALS
+// =============================================================================
+
+model Approval {
+  id                String          @id @default(cuid())
+  token             String          @unique @default(cuid())
+  stage             ProjectStage
+  stageLabel        String
+  status            ApprovalStatus  @default(PENDING)
+  deliverableUrl    String?
+  deliverableType   DeliverableType?
+  deliverableName   String?
+  respondedAt       DateTime?
+  responseNotes     String?
+  responseTimeHours Float?
+  viewedAt          DateTime?
+  viewCount         Int             @default(0)
+  reminderCount     Int             @default(0)
+  lastReminderAt    DateTime?
+  expiresAt         DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  projectId         String
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId          String
+  client            Client          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  sentById          String
+  sentBy            User            @relation("SentBy", fields: [sentById], references: [id], onDelete: Restrict)
+  reminders         Reminder[]
+  auditLogs         AuditLog[]
+
+  @@index([token])
+  @@index([projectId])
+  @@index([clientId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("approvals")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  EXPIRED
+}
+
+enum DeliverableType {
+  PDF
+  IMAGE
+  LINK
+}
+
+// =============================================================================
+// DOCUMENTS
+// =============================================================================
+
+model Document {
+  id         String       @id @default(cuid())
+  name       String
+  type       DocumentType
+  url        String
+  size       Int
+  mimeType   String
+  isPublic   Boolean      @default(false)
+  uploadedAt DateTime     @default(now())
+  projectId  String
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("documents")
+}
+
+enum DocumentType {
+  DRAWING
+  SPECIFICATION
+  REPORT
+  CONTRACT
+  OTHER
+}
+
+// =============================================================================
+// REMINDERS & NOTIFICATIONS
+// =============================================================================
+
+model Reminder {
+  id            String              @id @default(cuid())
+  type          ReminderType
+  channel       NotificationChannel
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  failureReason String?
+  scheduledFor  DateTime
+  createdAt     DateTime            @default(now())
+  approvalId    String
+  approval      Approval            @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  sentById      String
+  sentBy        User                @relation(fields: [sentById], references: [id], onDelete: Restrict)
+
+  @@index([approvalId])
+  @@index([scheduledFor])
+  @@map("reminders")
+}
+
+enum ReminderType {
+  FIRST
+  SECOND
+  ESCALATION
+  CUSTOM
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  SLACK
+}
+
+// =============================================================================
+// EMAIL TEMPLATES
+// =============================================================================
+
+model EmailTemplate {
+  id             String       @id @default(cuid())
+  name           String
+  slug           String
+  subject        String
+  bodyHtml       String
+  bodyText       String
+  isCustom       Boolean      @default(false)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@map("email_templates")
+}
+
+// =============================================================================
+// AUDIT LOG
+// =============================================================================
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  action         String
+  entityType     String
+  entityId       String
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json?
+  previousState  Json?
+  newState       Json?
+  createdAt      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  approvalId     String?
+  approval       Approval?    @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// SESSIONS & SECURITY
+// =============================================================================
+
+model CsrfToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  sessionId String?
+
+  @@index([token])
+  @@index([expiresAt])
+  @@map("csrf_tokens")
+}
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  endpoint    String
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+
+  @@index([key, endpoint])
+  @@map("rate_limits")
+}
