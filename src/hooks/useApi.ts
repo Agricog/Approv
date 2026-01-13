@@ -1,12 +1,16 @@
 /**
  * useApi Hook
  * Secure fetch wrapper with error handling and rate limiting awareness
- * SECURITY: Uses relative URLs only (prevents SSRF)
  */
 
 import { useState, useCallback } from 'react'
 import { captureApiError, addApiBreadcrumb } from '../utils/errorTracking'
-import { isRelativeUrl } from '../utils/validation'
+
+// =============================================================================
+// CONFIGURATION
+// =============================================================================
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'
 
 // =============================================================================
 // TYPES
@@ -70,16 +74,6 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
     endpoint: string,
     options: FetchOptions = {}
   ): Promise<T | null> => {
-    // SECURITY: Validate endpoint is relative (prevents SSRF)
-    if (!isRelativeUrl(endpoint)) {
-      const error: ApiError = {
-        code: 'INVALID_ENDPOINT',
-        message: 'Only relative URLs are allowed'
-      }
-      setState(prev => ({ ...prev, error, isLoading: false }))
-      return null
-    }
-
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     const {
@@ -88,6 +82,9 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       headers = {},
       timeout = DEFAULT_TIMEOUT
     } = options
+
+    // Build full URL
+    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
 
     // Create abort controller for timeout
     const controller = new AbortController()
@@ -99,9 +96,9 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
         ...headers
       }
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(url, {
         method,
-        credentials: 'include', // Send cookies for session
+        credentials: 'include',
         headers: requestHeaders,
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal
