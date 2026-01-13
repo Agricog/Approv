@@ -12,7 +12,17 @@ const logger = createLogger('email')
 // CONFIGURATION
 // =============================================================================
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY 
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null
+
+function getResend() {
+  if (!resend) {
+    logger.warn('Resend API key not configured - emails disabled')
+    return null
+  }
+  return resend
+}
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@approv.co.uk'
 const APP_URL = process.env.APP_URL || 'https://approv-production.up.railway.app'
 
@@ -57,7 +67,10 @@ export async function sendApprovalRequest(data: ApprovalRequestEmail): Promise<b
   const approvalUrl = `${APP_URL}/approve/${data.approvalToken}`
   
   try {
-    const { error } = await resend.emails.send({
+    const client = getResend()
+if (!client) return false
+
+const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `Approval Required: ${data.projectName} - ${data.stageName}`,
@@ -118,7 +131,10 @@ export async function sendApprovalRequest(data: ApprovalRequestEmail): Promise<b
  */
 export async function sendApprovalConfirmation(data: ApprovalConfirmationEmail): Promise<boolean> {
   try {
-    const { error } = await resend.emails.send({
+    const client = getResend()
+if (!client) return false
+
+const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `Approved: ${data.projectName} - ${data.stageName}`,
@@ -187,7 +203,10 @@ export async function sendApprovalReminder(data: ReminderEmail): Promise<boolean
   const isUrgent = data.daysPending >= 7
   
   try {
-    const { error } = await resend.emails.send({
+    const client = getResend()
+if (!client) return false
+
+const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `${isUrgent ? '⚠️ ' : ''}Reminder: Approval pending for ${data.projectName}`,
@@ -261,7 +280,10 @@ export async function sendTeamNotification(data: {
   const isApproved = data.action === 'approved'
   
   try {
-    const { error } = await resend.emails.send({
+    const client = getResend()
+if (!client) return false
+
+const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `${isApproved ? '✅' : '📝'} ${data.clientName} ${isApproved ? 'approved' : 'requested changes'}: ${data.projectName}`,
