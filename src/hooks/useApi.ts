@@ -2,7 +2,7 @@
  * useApi Hook
  * Secure fetch wrapper with error handling, CSRF protection, and rate limiting awareness
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { captureApiError, addApiBreadcrumb } from '../utils/errorTracking'
 
