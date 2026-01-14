@@ -262,6 +262,7 @@ router.post(
       const newClient = await prisma.client.create({
         data: {
           organizationId: organizationId!,
+          createdBy: user!.id,
           firstName: client.firstName,
           lastName: client.lastName,
           email: client.email,
