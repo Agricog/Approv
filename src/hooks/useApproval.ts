@@ -121,6 +121,17 @@ export function useApproval(token?: string): UseApprovalReturn {
     hasAttemptedFetchRef.current = false
   }, [api, submitApi])
 
+  // Get CSRF token from cookie
+  const getCsrfTokenFromCookie = useCallback((): string | null => {
+    const cookies = document.cookie.split('; ')
+    const csrfCookie = cookies.find(row => 
+      row.startsWith('XSRF-TOKEN=') || 
+      row.startsWith('csrf-token=') ||
+      row.startsWith('_csrf=')
+    )
+    return csrfCookie ? csrfCookie.split('=')[1] : null
+  }, [])
+
   // Fetch approval by token
   const fetchApproval = useCallback(async (approvalToken: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
@@ -247,12 +258,24 @@ export function useApproval(token?: string): UseApprovalReturn {
     setState(prev => ({ ...prev, isSubmitting: true, submitError: null }))
 
     try {
+      // Get CSRF token from cookie
+      const csrfToken = getCsrfTokenFromCookie()
+      
+      // Build headers with CSRF token
+      const headers: Record<string, string> = {}
+      if (csrfToken) {
+        // Try common CSRF header names
+        headers['X-CSRF-Token'] = csrfToken
+        headers['X-XSRF-TOKEN'] = csrfToken
+      }
+
       const result = await submitApi.execute(`/api/approvals/${token}/respond`, {
         method: 'POST',
         body: {
           action,
           notes: notes || undefined
         },
+        headers,
         skipAuth: true
       })
 
@@ -372,6 +395,9 @@ export function useApprovalStatus(status: ApprovalStatus | undefined) {
       borderClass: 'border-gray-200'
     }
   }
+
+  return statusConfig[status]
+}
 
   return statusConfig[status]
 }
