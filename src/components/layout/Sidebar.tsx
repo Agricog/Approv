@@ -2,7 +2,6 @@
  * Sidebar Component
  * Dashboard sidebar navigation
  */
-
 import { Link, useLocation } from 'react-router-dom'
 import { 
   LayoutDashboard, 
@@ -11,6 +10,7 @@ import {
   Settings,
   Bell,
   Users,
+  UserCircle,
   Clock,
   CheckCircle,
   ChevronLeft,
@@ -63,6 +63,11 @@ export function Sidebar({
       name: 'Projects',
       href: '/dashboard/projects',
       icon: <FolderKanban size={20} />
+    },
+    {
+      name: 'Clients',
+      href: '/dashboard/clients',
+      icon: <UserCircle size={20} />
     },
     {
       name: 'Approvals',
