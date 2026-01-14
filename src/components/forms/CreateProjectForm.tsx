@@ -7,9 +7,9 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Briefcase, User, Hash, FileText, DollarSign, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import * as Sentry from '@sentry/react'
 import { useApi } from '../../hooks/useApi'
 import { validateForm, PROJECT_VALIDATION } from '../../utils/formValidation'
-import { captureError } from '../../utils/errorTracking'
 import type { CreateProjectFormData, Project } from '../../types/formTypes'
 
 // =============================================================================
@@ -179,7 +179,9 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
       }
 
     } catch (err) {
-      captureError(err, { context: 'CreateProjectForm.handleSubmit' })
+      Sentry.captureException(err, {
+        tags: { component: 'CreateProjectForm', action: 'submit' }
+      })
       setState(prev => ({
         ...prev,
         isSubmitting: false,
