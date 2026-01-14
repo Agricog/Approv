@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Menu } from 'lucide-react'
+import { useUser, useClerk } from '@clerk/clerk-react'
 import { Header } from './Header'
 import { Sidebar, MobileSidebar } from './Sidebar'
 import { Footer } from './Footer'
@@ -17,12 +18,9 @@ import { useOfflineBanner } from '../../hooks'
 
 export interface DashboardLayoutProps {
   children?: React.ReactNode
-  userName?: string
-  userEmail?: string
   companyName?: string
   companyLogo?: string
   pendingApprovals?: number
-  onLogout?: () => void
 }
 
 // =============================================================================
@@ -31,16 +29,28 @@ export interface DashboardLayoutProps {
 
 export function DashboardLayout({
   children,
-  userName = 'User',
-  userEmail,
   companyName,
   companyLogo,
-  pendingApprovals = 0,
-  onLogout
+  pendingApprovals = 0
 }: DashboardLayoutProps) {
+  // Get user info from Clerk
+  const { user, isLoaded } = useUser()
+  const { signOut } = useClerk()
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const { showOfflineBanner, showReconnectedBanner, dismissReconnected } = useOfflineBanner()
+
+  // Derive user info from Clerk
+  const userName = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}`
+    : user?.firstName || user?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'User'
+  const userEmail = user?.primaryEmailAddress?.emailAddress || ''
+
+  // Handle sign out
+  const handleLogout = () => {
+    signOut({ redirectUrl: '/' })
+  }
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -131,7 +141,7 @@ export function DashboardLayout({
               userEmail={userEmail}
               companyName={companyName}
               companyLogo={companyLogo}
-              onLogout={onLogout}
+              onLogout={handleLogout}
             />
           </div>
 
