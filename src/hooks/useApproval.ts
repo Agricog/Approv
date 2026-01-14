@@ -107,7 +107,7 @@ const initialState: ApprovalState = {
 export function useApproval(token?: string): UseApprovalReturn {
   const [state, setState] = useState<ApprovalState>(initialState)
   const api = useApi<ApiApprovalResponse>()
-  const submitApi = useApi<{ success: boolean; action: string }>()
+  const submitApi = useApi<{ id: string; status: string; respondedAt: string; message: string }>()
   
   const retryCountRef = useRef(0)
   const hasAttemptedFetchRef = useRef(false)
@@ -282,7 +282,7 @@ export function useApproval(token?: string): UseApprovalReturn {
         skipAuth: true
       })
 
-      if (!result || !result.success) {
+      if (!result) {
         setState(prev => ({
           ...prev,
           isSubmitting: false,
