@@ -44,9 +44,9 @@ const APPROVAL_STAGES = [
 ] as const
 
 const DELIVERABLE_TYPES = [
-  { value: 'PDF', label: 'PDF Document', icon: FileText },
-  { value: 'IMAGE', label: 'Image/Render', icon: Image },
-  { value: 'LINK', label: 'External Link', icon: LinkIcon }
+  { value: 'pdf', label: 'PDF Document', icon: FileText },
+  { value: 'image', label: 'Image/Render', icon: Image },
+  { value: 'link', label: 'External Link', icon: LinkIcon }
 ] as const
 
 // =============================================================================
@@ -166,7 +166,7 @@ export default function CreateApprovalForm({
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
           submitData.deliverableName = validation.sanitized.deliverableName || 'Deliverable'
-          submitData.deliverableType = state.data.deliverableType || 'LINK'
+          submitData.deliverableType = state.data.deliverableType || 'link'
         }
       }
 
