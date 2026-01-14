@@ -17,6 +17,11 @@ import {
   Settings
 } from './pages'
 
+// New Pages
+import ProjectsPage from './pages/ProjectsPage'
+import CreateProjectPage from './pages/CreateProjectPage'
+import CreateApprovalPage from './pages/CreateApprovalPage'
+
 // Approval components
 import { ApprovalPage } from './components/approval'
 
@@ -211,9 +216,15 @@ export default function App() {
               <Route path="/portal" element={<PortalHome />} />
               <Route path="/portal/project/:projectId" element={<ProjectDetail />} />
 
+              {/* Projects - New routes for create forms */}
+              <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+              <Route path="/projects/new" element={<ProtectedRoute><CreateProjectPage /></ProtectedRoute>} />
+              <Route path="/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+              <Route path="/projects/:projectId/approvals/new" element={<ProtectedRoute><CreateApprovalPage /></ProtectedRoute>} />
+
               {/* Dashboard (protected) */}
               <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
-              <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+              <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
               <Route path="/dashboard/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
               <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
