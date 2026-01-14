@@ -3,7 +3,7 @@
  * Manages approval fetching and submission state
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApi } from './useApi'
 import { captureApprovalError, addActionBreadcrumb } from '../utils/errorTracking'
 import { trackApprovalViewed, trackApprovalSubmitted } from '../utils/analytics'
@@ -44,6 +44,14 @@ export interface UseApprovalReturn extends ApprovalState {
 }
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const MAX_RETRIES = 3
+const RETRY_DELAY = 2000 // 2 seconds
+const NON_RETRYABLE_ERRORS = ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED', 'HTTP_404', 'HTTP_403', 'HTTP_401', 'HTTP_507']
+
+// =============================================================================
 // INITIAL STATE
 // =============================================================================
 
@@ -65,12 +73,18 @@ export function useApproval(token?: string): UseApprovalReturn {
   const [state, setState] = useState<ApprovalState>(initialState)
   const api = useApi<{ approval: ApprovalData }>()
   const submitApi = useApi<{ success: boolean; action: string }>()
+  
+  // Track retry attempts
+  const retryCountRef = useRef(0)
+  const hasAttemptedFetchRef = useRef(false)
 
   // Reset state
   const reset = useCallback(() => {
     setState(initialState)
     api.reset()
     submitApi.reset()
+    retryCountRef.current = 0
+    hasAttemptedFetchRef.current = false
   }, [api, submitApi])
 
   // Fetch approval by token
@@ -81,13 +95,39 @@ export function useApproval(token?: string): UseApprovalReturn {
       const result = await api.execute(`/api/approvals/${approvalToken}`)
 
       if (!result || !result.approval) {
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-          error: api.error?.message || 'Approval not found'
-        }))
+        const errorCode = api.error?.code
+        const errorMessage = api.error?.message || 'Approval not found'
+        
+        // Check if error is non-retryable
+        if (errorCode && NON_RETRYABLE_ERRORS.includes(errorCode)) {
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: errorMessage
+          }))
+          retryCountRef.current = 0 // Reset for future attempts
+          return
+        }
+
+        // Check if we've hit retry limit
+        if (retryCountRef.current >= MAX_RETRIES) {
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: 'Unable to load approval after multiple attempts. Please refresh the page.'
+          }))
+          retryCountRef.current = 0 // Reset for future attempts
+          return
+        }
+
+        // Retry on network/server errors
+        retryCountRef.current++
+        setTimeout(() => fetchApproval(approvalToken), RETRY_DELAY)
         return
       }
+
+      // Success - reset retry counter
+      retryCountRef.current = 0
 
       const approval = result.approval
       const now = new Date()
@@ -117,11 +157,21 @@ export function useApproval(token?: string): UseApprovalReturn {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load approval'
       captureApprovalError(err, 'fetchApproval', undefined)
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: errorMessage
-      }))
+      
+      // Check retry limit for caught errors
+      if (retryCountRef.current >= MAX_RETRIES) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: 'Unable to load approval. Please refresh the page.'
+        }))
+        retryCountRef.current = 0
+        return
+      }
+
+      // Retry
+      retryCountRef.current++
+      setTimeout(() => fetchApproval(approvalToken), RETRY_DELAY)
     }
   }, [api])
 
@@ -211,12 +261,13 @@ export function useApproval(token?: string): UseApprovalReturn {
     }
   }, [state.approval, state.isExpired, state.isAlreadyResponded, token, submitApi])
 
-  // Auto-fetch if token provided
+  // Auto-fetch if token provided (FIXED: removed fetchApproval from deps)
   useEffect(() => {
-    if (token) {
+    if (token && !hasAttemptedFetchRef.current) {
+      hasAttemptedFetchRef.current = true
       fetchApproval(token)
     }
-  }, [token, fetchApproval])
+  }, [token]) // ✅ Only re-run when token changes
 
   return {
     ...state,
