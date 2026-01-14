@@ -4,13 +4,12 @@
  * AUTAIMATE BUILD STANDARD v2 - OWASP 2024 Compliant
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Link as LinkIcon, Image, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { validateForm, APPROVAL_VALIDATION, sanitizeUrl } from '../../utils/formValidation'
 import { captureError } from '../../utils/errorTracking'
-import { trackEvent } from '../../utils/analytics'
 import type { CreateApprovalFormData, ApprovalCreatedResponse } from '../../types/formTypes'
 
 // =============================================================================
@@ -145,7 +144,7 @@ export default function CreateApprovalForm({
     e.preventDefault()
 
     // Client-side validation
-    const validation = validateForm(state.data, APPROVAL_VALIDATION)
+    const validation = validateForm(state.data as Record<string, any>, APPROVAL_VALIDATION)
     
     if (!validation.isValid) {
       setState(prev => ({
@@ -187,11 +186,13 @@ export default function CreateApprovalForm({
       }
 
       // Track success
-      trackEvent('approval_created', {
-        projectId,
-        stage: submitData.stage,
-        hasDeliverable: !!submitData.deliverableUrl
-      })
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'approval_created', {
+          project_id: projectId,
+          stage: submitData.stage,
+          has_deliverable: !!submitData.deliverableUrl
+        })
+      }
 
       setState(prev => ({
         ...prev,
@@ -206,7 +207,9 @@ export default function CreateApprovalForm({
       }
 
     } catch (err) {
-      captureError(err, 'CreateApprovalForm.handleSubmit')
+      if (err instanceof Error) {
+        captureError(err)
+      }
       setState(prev => ({
         ...prev,
         isSubmitting: false,
@@ -235,7 +238,11 @@ export default function CreateApprovalForm({
             <button
               onClick={() => {
                 navigator.clipboard.writeText(state.createdApproval!.approvalUrl)
-                trackEvent('approval_url_copied', { approvalId: state.createdApproval!.id })
+                if (typeof window !== 'undefined' && (window as any).gtag) {
+                  (window as any).gtag('event', 'approval_url_copied', {
+                    approval_id: state.createdApproval!.id
+                  })
+                }
               }}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
@@ -504,3 +511,16 @@ export default function CreateApprovalForm({
     </form>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
