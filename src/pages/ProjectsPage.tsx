@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Plus, Search, Briefcase, Calendar, User, AlertCircle, Loader2, Filter } from 'lucide-react'
+import { Plus, Search, Briefcase, Calendar, AlertCircle, Loader2, Filter } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
 import type { Project } from '../types/formTypes'
