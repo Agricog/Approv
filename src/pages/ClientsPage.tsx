@@ -1,0 +1,215 @@
+/**
+ * ClientsPage Component
+ * List and manage clients
+ */
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Plus, Search, UserCircle, Mail, Building2, Phone, MoreVertical, Loader2 } from 'lucide-react'
+import { useApi } from '../../hooks/useApi'
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+interface Client {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string | null
+  company: string | null
+  createdAt: string
+  _count?: {
+    projects: number
+    approvals: number
+  }
+}
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
+
+export default function ClientsPage() {
+  const api = useApi<{ data: Client[] }>()
+  const [clients, setClients] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    loadClients()
+  }, [])
+
+  const loadClients = async () => {
+    setLoading(true)
+    try {
+      const result = await api.execute('/api/clients')
+      if (result?.data) {
+        setClients(result.data)
+      }
+    } catch (err) {
+      console.error('Failed to load clients:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredClients = clients.filter(client => {
+    const query = searchQuery.toLowerCase()
+    return (
+      client.firstName.toLowerCase().includes(query) ||
+      client.lastName.toLowerCase().includes(query) ||
+      client.email.toLowerCase().includes(query) ||
+      (client.company && client.company.toLowerCase().includes(query))
+    )
+  })
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
+          <p className="text-gray-600 mt-1">Manage your client contacts</p>
+        </div>
+        <Link
+          to="/dashboard/clients/new"
+          className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
+        >
+          <Plus size={20} />
+          Add Client
+        </Link>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <input
+          type="text"
+          placeholder="Search clients..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Clients List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+        </div>
+      ) : filteredClients.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <UserCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {searchQuery ? 'No clients found' : 'No clients yet'}
+          </h3>
+          <p className="text-gray-500 mb-6">
+            {searchQuery 
+              ? 'Try adjusting your search query'
+              : 'Add your first client to get started'
+            }
+          </p>
+          {!searchQuery && (
+            <Link
+              to="/dashboard/clients/new"
+              className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
+            >
+              <Plus size={20} />
+              Add Client
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Client
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Contact
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Company
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Projects
+                  </th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredClients.map((client) => (
+                  <tr key={client.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                          <span className="text-green-700 font-medium">
+                            {client.firstName[0]}{client.lastName[0]}
+                          </span>
+                        </div>
+                        <div>
+                          <Link 
+                            to={`/dashboard/clients/${client.id}`}
+                            className="font-medium text-gray-900 hover:text-green-600"
+                          >
+                            {client.firstName} {client.lastName}
+                          </Link>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Mail size={14} />
+                          <a href={`mailto:${client.email}`} className="hover:text-green-600">
+                            {client.email}
+                          </a>
+                        </div>
+                        {client.phone && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Phone size={14} />
+                            <a href={`tel:${client.phone}`} className="hover:text-green-600">
+                              {client.phone}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {client.company ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Building2 size={14} />
+                          {client.company}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-gray-600">
+                        {client._count?.projects || 0} projects
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link
+                        to={`/dashboard/clients/${client.id}`}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <MoreVertical size={20} />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
