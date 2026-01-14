@@ -8,9 +8,8 @@ import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Briefcase, User, Hash, FileText, DollarSign, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
-import { validateForm, PROJECT_VALIDATION, sanitizeString } from '../../utils/formValidation'
+import { validateForm, PROJECT_VALIDATION } from '../../utils/formValidation'
 import { captureError } from '../../utils/errorTracking'
-import { trackEvent } from '../../utils/analytics'
 import type { CreateProjectFormData, Project } from '../../types/formTypes'
 
 // =============================================================================
@@ -124,7 +123,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     e.preventDefault()
 
     // Client-side validation
-    const validation = validateForm(state.data, PROJECT_VALIDATION)
+    const validation = validateForm(state.data as Record<string, any>, PROJECT_VALIDATION)
     
     if (!validation.isValid) {
       setState(prev => ({
@@ -159,11 +158,13 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
       }
 
       // Track success
-      trackEvent('project_created', {
-        projectId: result.id,
-        hasDescription: !!submitData.description,
-        hasBudget: !!submitData.budget
-      })
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'project_created', {
+          project_id: result.id,
+          has_description: !!submitData.description,
+          has_budget: !!submitData.budget
+        })
+      }
 
       setState(prev => ({
         ...prev,
@@ -178,7 +179,9 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
       }
 
     } catch (err) {
-      captureError(err, 'CreateProjectForm.handleSubmit')
+      if (err instanceof Error) {
+        captureError(err)
+      }
       setState(prev => ({
         ...prev,
         isSubmitting: false,
@@ -439,3 +442,16 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     </form>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
