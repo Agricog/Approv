@@ -76,17 +76,24 @@ enum UserRole {
 
 model Client {
   id                String    @id @default(cuid())
+  organizationId    String    @map("organization_id")
+  createdBy         String    @map("created_by")
+  
   email             String
-  firstName         String
-  lastName          String
+  firstName         String    @map("first_name")
+  lastName          String    @map("last_name")
   company           String?
   phone             String?
-  portalToken       String    @unique @default(cuid())
-  portalTokenExpiry DateTime?
-  lastPortalAccess  DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  organizationId    String
+  address           String?
+  notes             String?
+  
+  portalToken       String    @unique @default(cuid()) @map("portal_token")
+  portalTokenExpiry DateTime? @map("portal_token_expiry")
+  lastPortalAccess  DateTime? @map("last_portal_access")
+  
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projects          Project[]
   approvals         Approval[]
