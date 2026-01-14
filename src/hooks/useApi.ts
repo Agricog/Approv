@@ -2,7 +2,7 @@
  * useApi Hook
  * Secure fetch wrapper with error handling, CSRF protection, and rate limiting awareness
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { captureApiError, addApiBreadcrumb } from '../utils/errorTracking'
 
@@ -89,8 +89,11 @@ async function getCsrfToken(authToken: string | null): Promise<string | null> {
 
     const data = await response.json()
     
-    if (data.success && data.data?.token) {
-      cachedCsrfToken = data.data.token
+    // Handle both formats: { token: "..." } or { success: true, data: { token: "..." } }
+    const token = data.token || data.data?.token
+    
+    if (token) {
+      cachedCsrfToken = token
       // Token expires in 1 hour, cache for 55 minutes
       csrfTokenExpiry = Date.now() + 55 * 60 * 1000
       return cachedCsrfToken
