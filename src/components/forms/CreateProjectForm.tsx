@@ -44,7 +44,7 @@ interface FormState {
 export default function CreateProjectForm({ onSuccess, onCancel }: CreateProjectFormProps) {
   const navigate = useNavigate()
   const api = useApi<Project>()
-  const clientsApi = useApi<{ data: Client[] }>()
+  const clientsApi = useApi<Client[]>()
 
   const [state, setState] = useState<FormState>({
     data: {
@@ -70,7 +70,10 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
   useEffect(() => {
     clientsApi.execute('/api/clients')
       .then(result => {
-        if (result?.data) {
+        // result is already unwrapped by useApi - it's the array directly
+        if (Array.isArray(result)) {
+          setClients(result)
+        } else if (result?.data && Array.isArray(result.data)) {
           setClients(result.data)
         }
       })
@@ -321,7 +324,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
           </div>
         ) : clients.length === 0 ? (
           <div className="text-sm text-gray-500">
-            No clients found. <button type="button" onClick={() => navigate('/clients/new')} className="text-blue-600 hover:underline">Create a client first</button>
+            No clients found. <button type="button" onClick={() => navigate('/dashboard/clients/new')} className="text-blue-600 hover:underline">Create a client first</button>
           </div>
         ) : (
           <select
