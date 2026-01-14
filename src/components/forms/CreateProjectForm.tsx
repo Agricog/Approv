@@ -3,8 +3,7 @@
  * Enterprise-grade form for creating new projects
  * AUTAIMATE BUILD STANDARD v2 - OWASP 2024 Compliant
  */
-
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Briefcase, User, Hash, FileText, DollarSign, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
@@ -45,7 +44,7 @@ interface FormState {
 export default function CreateProjectForm({ onSuccess, onCancel }: CreateProjectFormProps) {
   const navigate = useNavigate()
   const api = useApi<Project>()
-  const clientsApi = useApi<{ items: Client[] }>()
+  const clientsApi = useApi<{ data: Client[] }>()
 
   const [state, setState] = useState<FormState>({
     data: {
@@ -68,17 +67,20 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
   const [loadingClients, setLoadingClients] = useState(true)
 
   // Load clients on mount
-  useState(() => {
+  useEffect(() => {
     clientsApi.execute('/api/clients')
       .then(result => {
-        if (result?.items) {
-          setClients(result.items)
+        if (result?.data) {
+          setClients(result.data)
         }
+      })
+      .catch(err => {
+        console.error('Failed to load clients:', err)
       })
       .finally(() => {
         setLoadingClients(false)
       })
-  })
+  }, [])
 
   // Handle input change
   const handleInputChange = useCallback((field: keyof CreateProjectFormData, value: any) => {
@@ -182,6 +184,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
       Sentry.captureException(err, {
         tags: { component: 'CreateProjectForm', action: 'submit' }
       })
+
       setState(prev => ({
         ...prev,
         isSubmitting: false,
@@ -312,7 +315,14 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
           Client <span className="text-red-500">*</span>
         </label>
         {loadingClients ? (
-          <div className="text-sm text-gray-500">Loading clients...</div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading clients...
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="text-sm text-gray-500">
+            No clients found. <button type="button" onClick={() => navigate('/clients/new')} className="text-blue-600 hover:underline">Create a client first</button>
+          </div>
         ) : (
           <select
             id="clientId"
@@ -395,7 +405,6 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
             className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-
         <div>
           <label htmlFor="targetCompletionDate" className="block text-sm font-medium text-gray-700 mb-2">
             <Calendar className="w-4 h-4 inline mr-1" />
@@ -426,7 +435,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
         )}
         <button
           type="submit"
-          disabled={state.isSubmitting}
+          disabled={state.isSubmitting || loadingClients || clients.length === 0}
           className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {state.isSubmitting ? (
@@ -442,7 +451,6 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     </form>
   )
 }
-
 
 
 
