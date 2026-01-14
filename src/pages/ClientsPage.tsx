@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, UserCircle, Mail, Building2, Phone, MoreVertical, Loader2 } from 'lucide-react'
-import { useApi } from '../../hooks/useApi'
+import { useApi } from '../hooks/useApi'
 
 // =============================================================================
 // TYPES
