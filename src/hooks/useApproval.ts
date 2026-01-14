@@ -155,7 +155,6 @@ export function useApproval(token?: string): UseApprovalReturn {
       }
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load approval'
       captureApprovalError(err, 'fetchApproval', undefined)
       
       // Check retry limit for caught errors
