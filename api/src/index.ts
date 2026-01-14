@@ -26,6 +26,7 @@ import { healthRoutes } from './routes/health.js'
 import { csrfRoutes } from './routes/csrf.js'
 import { approvalRoutes } from './routes/approvals.js'
 import { projectRoutes } from './routes/projects.js'
+import { clientRoutes } from './routes/clients.js' // ← NEW: Clients route
 import { dashboardRoutes } from './routes/dashboard.js'
 import { portalRoutes } from './routes/portal.js'
 import { webhookRoutes } from './routes/webhooks.js'
@@ -199,6 +200,7 @@ app.use('/api/webhooks', webhookRoutes)
 // Protected routes (require CSRF for mutations)
 app.use('/api/approvals', csrfProtection, approvalRoutes)
 app.use('/api/projects', csrfProtection, projectRoutes)
+app.use('/api/clients', csrfProtection, clientRoutes) // ← NEW: Clients endpoint
 app.use('/api/dashboard', csrfProtection, dashboardRoutes)
 app.use('/api/portal', csrfProtection, portalRoutes)
 app.use('/api/uploads', csrfProtection, uploadRoutes)
