@@ -107,7 +107,7 @@ export default function CreateApprovalPage() {
           <CreateApprovalForm
             projectId={project.id}
             projectName={project.name}
-            onSuccess={(approval) => {
+            onSuccess={() => {
               // Redirect to project page after success
               setTimeout(() => {
                 navigate(`/projects/${projectId}`)
