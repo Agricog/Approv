@@ -1,9 +1,8 @@
 /**
  * useApi Hook
- * Secure fetch wrapper with error handling and rate limiting awareness
+ * Secure fetch wrapper with error handling, CSRF protection, and rate limiting awareness
  */
-
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import { captureApiError, addApiBreadcrumb } from '../utils/errorTracking'
 
@@ -36,6 +35,7 @@ export interface FetchOptions {
   headers?: Record<string, string>
   timeout?: number
   skipAuth?: boolean
+  skipCsrf?: boolean
 }
 
 interface UseApiReturn<T> {
@@ -52,6 +52,56 @@ interface UseApiReturn<T> {
 
 const DEFAULT_TIMEOUT = 30000 // 30 seconds
 const RETRY_STATUS_CODES = [408, 429, 503, 504]
+const METHODS_REQUIRING_CSRF = ['POST', 'PUT', 'DELETE', 'PATCH']
+
+// =============================================================================
+// CSRF TOKEN CACHE
+// =============================================================================
+
+let cachedCsrfToken: string | null = null
+let csrfTokenExpiry: number = 0
+
+async function getCsrfToken(authToken: string | null): Promise<string | null> {
+  // Return cached token if still valid (with 1 minute buffer)
+  if (cachedCsrfToken && Date.now() < csrfTokenExpiry - 60000) {
+    return cachedCsrfToken
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    }
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+      method: 'GET',
+      credentials: 'include',
+      headers
+    })
+
+    if (!response.ok) {
+      console.error('Failed to get CSRF token:', response.status)
+      return null
+    }
+
+    const data = await response.json()
+    
+    if (data.success && data.data?.token) {
+      cachedCsrfToken = data.data.token
+      // Token expires in 1 hour, cache for 55 minutes
+      csrfTokenExpiry = Date.now() + 55 * 60 * 1000
+      return cachedCsrfToken
+    }
+    
+    return null
+  } catch (err) {
+    console.error('Error fetching CSRF token:', err)
+    return null
+  }
+}
 
 // =============================================================================
 // HOOK
@@ -85,7 +135,8 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       body,
       headers = {},
       timeout = DEFAULT_TIMEOUT,
-      skipAuth = false
+      skipAuth = false,
+      skipCsrf = false
     } = options
 
     // Build full URL
@@ -102,14 +153,23 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       }
 
       // Add auth token
+      let authToken: string | null = null
       if (!skipAuth) {
         try {
-          const token = await getToken()
-          if (token) {
-            requestHeaders['Authorization'] = `Bearer ${token}`
+          authToken = await getToken()
+          if (authToken) {
+            requestHeaders['Authorization'] = `Bearer ${authToken}`
           }
         } catch {
           // Continue without token
+        }
+      }
+
+      // Add CSRF token for state-changing methods
+      if (!skipCsrf && METHODS_REQUIRING_CSRF.includes(method)) {
+        const csrfToken = await getCsrfToken(authToken)
+        if (csrfToken) {
+          requestHeaders['X-CSRF-Token'] = csrfToken
         }
       }
 
@@ -139,6 +199,13 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
         return null
       }
 
+      // Handle CSRF token expired/invalid - retry once with fresh token
+      if (response.status === 403 && METHODS_REQUIRING_CSRF.includes(method)) {
+        // Clear cached token and retry once
+        cachedCsrfToken = null
+        csrfTokenExpiry = 0
+      }
+
       // Handle other errors
       if (!response.ok) {
         let errorData: { code?: string; message?: string } = {}
@@ -165,17 +232,19 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
       }
 
       // Parse successful response
-const responseData = await response.json()
-// Unwrap { success: true, data: ... } format
-const data = (responseData.success && responseData.data !== undefined) 
-  ? responseData.data as T 
-  : responseData as T
-setState({ data, isLoading: false, error: null })
-return data
+      const responseData = await response.json()
+      
+      // Unwrap { success: true, data: ... } format
+      const data = (responseData.success && responseData.data !== undefined) 
+        ? responseData.data as T 
+        : responseData as T
+
+      setState({ data, isLoading: false, error: null })
+      return data
 
     } catch (err) {
       clearTimeout(timeoutId)
-
+      
       let error: ApiError
 
       if (err instanceof Error) {
@@ -279,4 +348,12 @@ export function useApiPost<T = unknown>() {
   }, [api])
 
   return { ...api, post }
+}
+
+/**
+ * Clear CSRF token cache (useful on logout)
+ */
+export function clearCsrfCache() {
+  cachedCsrfToken = null
+  csrfTokenExpiry = 0
 }
