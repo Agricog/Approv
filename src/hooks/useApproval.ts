@@ -14,17 +14,51 @@ import type { ApprovalStatus } from '../types'
 // TYPES
 // =============================================================================
 
-export interface ApprovalData {
+interface ApiApprovalResponse {
   id: string
   projectName: string
+  projectReference: string
   clientName: string
-  approvalStage: string
+  clientCompany: string | null
+  stage: string
+  stageLabel: string
+  status: string // Uppercase from API: PENDING, APPROVED, CHANGES_REQUESTED
   deliverableUrl: string | null
   deliverableType: 'pdf' | 'image' | 'link' | null
-  status: ApprovalStatus
+  deliverableName: string | null
   createdAt: string
   expiresAt: string
   respondedAt: string | null
+  responseNotes: string | null
+  organization: {
+    name: string
+    logo: string | null
+    primaryColor: string
+  }
+}
+
+export interface ApprovalData {
+  id: string
+  projectName: string
+  projectReference: string
+  clientName: string
+  clientCompany: string | null
+  stage: string
+  stageLabel: string
+  approvalStage: string // Mapped from stageLabel for component compatibility
+  status: ApprovalStatus
+  deliverableUrl: string | null
+  deliverableType: 'pdf' | 'image' | 'link' | null
+  deliverableName: string | null
+  createdAt: string
+  expiresAt: string
+  respondedAt: string | null
+  responseNotes: string | null
+  organization: {
+    name: string
+    logo: string | null
+    primaryColor: string
+  }
 }
 
 export interface ApprovalState {
@@ -71,7 +105,7 @@ const initialState: ApprovalState = {
 
 export function useApproval(token?: string): UseApprovalReturn {
   const [state, setState] = useState<ApprovalState>(initialState)
-  const api = useApi<{ approval: ApprovalData }>()
+  const api = useApi<ApiApprovalResponse>()
   const submitApi = useApi<{ success: boolean; action: string }>()
   
   // Track retry attempts
@@ -94,7 +128,7 @@ export function useApproval(token?: string): UseApprovalReturn {
     try {
       const result = await api.execute(`/api/approvals/${approvalToken}`)
 
-      if (!result || !result.approval) {
+      if (!result) {
         const errorCode = api.error?.code
         const errorMessage = api.error?.message || 'Approval not found'
         
@@ -129,7 +163,14 @@ export function useApproval(token?: string): UseApprovalReturn {
       // Success - reset retry counter
       retryCountRef.current = 0
 
-      const approval = result.approval
+      // Map API response to component format
+      const approval: ApprovalData = {
+        ...result,
+        approvalStage: result.stageLabel || result.stage,
+        clientName: result.clientName,
+        status: result.status.toLowerCase() as ApprovalStatus
+      }
+      
       const now = new Date()
       const expiresAt = new Date(approval.expiresAt)
       const isExpired = now > expiresAt
