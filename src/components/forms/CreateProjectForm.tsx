@@ -71,10 +71,8 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     clientsApi.execute('/api/clients')
       .then(result => {
         // result is already unwrapped by useApi - it's the array directly
-        if (Array.isArray(result)) {
+        if (result && Array.isArray(result)) {
           setClients(result)
-        } else if (result?.data && Array.isArray(result.data)) {
-          setClients(result.data)
         }
       })
       .catch(err => {
