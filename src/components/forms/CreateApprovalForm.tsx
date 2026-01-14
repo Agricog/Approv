@@ -144,7 +144,7 @@ export default function CreateApprovalForm({
     e.preventDefault()
 
     // Client-side validation
-    const validation = validateForm(state.data as Record<string, any>, APPROVAL_VALIDATION)
+    const validation = validateForm(state.data, APPROVAL_VALIDATION)
     
     if (!validation.isValid) {
       setState(prev => ({
@@ -207,9 +207,7 @@ export default function CreateApprovalForm({
       }
 
     } catch (err) {
-      if (err instanceof Error) {
-        captureError(err)
-      }
+      captureError(err, { context: 'CreateApprovalForm.handleSubmit' })
       setState(prev => ({
         ...prev,
         isSubmitting: false,
