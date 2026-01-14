@@ -229,7 +229,5 @@ export const APPROVAL_VALIDATION: ValidationSchema = {
 }
 
 // =============================================================================
-// EXPORT
-// =============================================================================
-
-export { ValidationRule, ValidationSchema }
+// COMMON VALIDATION SCHEMAS
+// ==
