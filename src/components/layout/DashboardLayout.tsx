@@ -34,7 +34,7 @@ export function DashboardLayout({
   pendingApprovals = 0
 }: DashboardLayoutProps) {
   // Get user info from Clerk
-  const { user, isLoaded } = useUser()
+  const { user } = useUser()
   const { signOut } = useClerk()
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
