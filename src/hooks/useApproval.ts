@@ -22,7 +22,7 @@ interface ApiApprovalResponse {
   clientCompany: string | null
   stage: string
   stageLabel: string
-  status: string // Uppercase from API: PENDING, APPROVED, CHANGES_REQUESTED
+  status: string
   deliverableUrl: string | null
   deliverableType: 'pdf' | 'image' | 'link' | null
   deliverableName: string | null
@@ -45,7 +45,7 @@ export interface ApprovalData {
   clientCompany: string | null
   stage: string
   stageLabel: string
-  approvalStage: string // Mapped from stageLabel for component compatibility
+  approvalStage: string
   status: ApprovalStatus
   deliverableUrl: string | null
   deliverableType: 'pdf' | 'image' | 'link' | null
@@ -82,8 +82,9 @@ export interface UseApprovalReturn extends ApprovalState {
 // =============================================================================
 
 const MAX_RETRIES = 3
-const RETRY_DELAY = 2000 // 2 seconds
+const RETRY_DELAY = 2000
 const NON_RETRYABLE_ERRORS = ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED', 'HTTP_404', 'HTTP_403', 'HTTP_401', 'HTTP_507']
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'
 
 // =============================================================================
 // INITIAL STATE
@@ -108,31 +109,44 @@ export function useApproval(token?: string): UseApprovalReturn {
   const api = useApi<ApiApprovalResponse>()
   const submitApi = useApi<{ success: boolean; action: string }>()
   
-  // Track retry attempts
   const retryCountRef = useRef(0)
   const hasAttemptedFetchRef = useRef(false)
+  const csrfTokenRef = useRef<string | null>(null)
 
-  // Reset state
   const reset = useCallback(() => {
     setState(initialState)
     api.reset()
     submitApi.reset()
     retryCountRef.current = 0
     hasAttemptedFetchRef.current = false
+    csrfTokenRef.current = null
   }, [api, submitApi])
 
-  // Get CSRF token from cookie
-  const getCsrfTokenFromCookie = useCallback((): string | null => {
-    const cookies = document.cookie.split('; ')
-    const csrfCookie = cookies.find(row => 
-      row.startsWith('XSRF-TOKEN=') || 
-      row.startsWith('csrf-token=') ||
-      row.startsWith('_csrf=')
-    )
-    return csrfCookie ? csrfCookie.split('=')[1] : null
+  const fetchCsrfToken = useCallback(async (): Promise<string | null> => {
+    if (csrfTokenRef.current) {
+      return csrfTokenRef.current
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const token = data.token
+        if (token) {
+          csrfTokenRef.current = token
+          return token
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch CSRF token:', err)
+    }
+
+    return null
   }, [])
 
-  // Fetch approval by token
   const fetchApproval = useCallback(async (approvalToken: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -143,38 +157,33 @@ export function useApproval(token?: string): UseApprovalReturn {
         const errorCode = api.error?.code
         const errorMessage = api.error?.message || 'Approval not found'
         
-        // Check if error is non-retryable
         if (errorCode && NON_RETRYABLE_ERRORS.includes(errorCode)) {
           setState(prev => ({
             ...prev,
             isLoading: false,
             error: errorMessage
           }))
-          retryCountRef.current = 0 // Reset for future attempts
+          retryCountRef.current = 0
           return
         }
 
-        // Check if we've hit retry limit
         if (retryCountRef.current >= MAX_RETRIES) {
           setState(prev => ({
             ...prev,
             isLoading: false,
             error: 'Unable to load approval after multiple attempts. Please refresh the page.'
           }))
-          retryCountRef.current = 0 // Reset for future attempts
+          retryCountRef.current = 0
           return
         }
 
-        // Retry on network/server errors
         retryCountRef.current++
         setTimeout(() => fetchApproval(approvalToken), RETRY_DELAY)
         return
       }
 
-      // Success - reset retry counter
       retryCountRef.current = 0
 
-      // Map API response to component format
       const approval: ApprovalData = {
         ...result,
         approvalStage: result.stageLabel || result.stage,
@@ -197,19 +206,19 @@ export function useApproval(token?: string): UseApprovalReturn {
         isAlreadyResponded
       })
 
-      // Track view if pending
       if (!isExpired && !isAlreadyResponded) {
         trackApprovalViewed(approval.approvalStage, !!approval.deliverableUrl)
         addActionBreadcrumb('Approval viewed', 'approval', {
           stage: approval.approvalStage,
           hasDeliverable: !!approval.deliverableUrl
         })
+        
+        fetchCsrfToken().catch(() => {})
       }
 
     } catch (err) {
       captureApprovalError(err, 'fetchApproval', undefined)
       
-      // Check retry limit for caught errors
       if (retryCountRef.current >= MAX_RETRIES) {
         setState(prev => ({
           ...prev,
@@ -220,13 +229,11 @@ export function useApproval(token?: string): UseApprovalReturn {
         return
       }
 
-      // Retry
       retryCountRef.current++
       setTimeout(() => fetchApproval(approvalToken), RETRY_DELAY)
     }
-  }, [api])
+  }, [api, fetchCsrfToken])
 
-  // Submit approval response
   const submitApproval = useCallback(async (
     action: 'approve' | 'request_changes',
     notes?: string
@@ -258,15 +265,11 @@ export function useApproval(token?: string): UseApprovalReturn {
     setState(prev => ({ ...prev, isSubmitting: true, submitError: null }))
 
     try {
-      // Get CSRF token from cookie
-      const csrfToken = getCsrfTokenFromCookie()
-      
-      // Build headers with CSRF token
+      const csrfToken = await fetchCsrfToken()
+
       const headers: Record<string, string> = {}
       if (csrfToken) {
-        // Try common CSRF header names
-        headers['X-CSRF-Token'] = csrfToken
-        headers['X-XSRF-TOKEN'] = csrfToken
+        headers['x-csrf-token'] = csrfToken
       }
 
       const result = await submitApi.execute(`/api/approvals/${token}/respond`, {
@@ -288,10 +291,8 @@ export function useApproval(token?: string): UseApprovalReturn {
         return false
       }
 
-      // Calculate response time for analytics
       const responseTimeHours = getDaysPending(state.approval.createdAt) * 24
 
-      // Track successful submission (map action to analytics type)
       const analyticsAction = action === 'approve' ? 'approved' : 'changes_requested'
       trackApprovalSubmitted(state.approval.approvalStage, analyticsAction, responseTimeHours)
       addActionBreadcrumb(`Approval ${action}`, 'approval', {
@@ -299,7 +300,6 @@ export function useApproval(token?: string): UseApprovalReturn {
         responseTimeHours
       })
 
-      // Update local state
       setState(prev => ({
         ...prev,
         isSubmitting: false,
@@ -323,15 +323,14 @@ export function useApproval(token?: string): UseApprovalReturn {
       }))
       return false
     }
-  }, [state.approval, state.isExpired, state.isAlreadyResponded, token, submitApi])
+  }, [state.approval, state.isExpired, state.isAlreadyResponded, token, submitApi, fetchCsrfToken])
 
-  // Auto-fetch if token provided (FIXED: removed fetchApproval from deps)
   useEffect(() => {
     if (token && !hasAttemptedFetchRef.current) {
       hasAttemptedFetchRef.current = true
       fetchApproval(token)
     }
-  }, [token]) // ✅ Only re-run when token changes
+  }, [token])
 
   return {
     ...state,
@@ -341,13 +340,6 @@ export function useApproval(token?: string): UseApprovalReturn {
   }
 }
 
-// =============================================================================
-// HELPER HOOKS
-// =============================================================================
-
-/**
- * Hook to get approval status display info
- */
 export function useApprovalStatus(status: ApprovalStatus | undefined) {
   if (!status) {
     return {
