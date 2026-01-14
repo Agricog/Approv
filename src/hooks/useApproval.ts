@@ -11,6 +11,12 @@ import { getDaysPending } from '../utils/formatters'
 import type { ApprovalStatus } from '../types'
 
 // =============================================================================
+// CONFIGURATION
+// =============================================================================
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -111,6 +117,7 @@ export function useApproval(token?: string): UseApprovalReturn {
   // Track retry attempts
   const retryCountRef = useRef(0)
   const hasAttemptedFetchRef = useRef(false)
+  const csrfTokenRef = useRef<string | null>(null)
 
   // Reset state
   const reset = useCallback(() => {
@@ -119,7 +126,47 @@ export function useApproval(token?: string): UseApprovalReturn {
     submitApi.reset()
     retryCountRef.current = 0
     hasAttemptedFetchRef.current = false
+    csrfTokenRef.current = null
   }, [api, submitApi])
+
+  // Fetch CSRF token
+  const fetchCsrfToken = useCallback(async (): Promise<string | null> => {
+    // Check if already cached
+    if (csrfTokenRef.current) {
+      return csrfTokenRef.current
+    }
+
+    // Try to get from cookie first
+    const cookieToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('XSRF-TOKEN='))
+      ?.split('=')[1]
+    
+    if (cookieToken) {
+      csrfTokenRef.current = cookieToken
+      return cookieToken
+    }
+
+    // If not in cookie, fetch from API
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const token = data.csrfToken || data.token
+        if (token) {
+          csrfTokenRef.current = token
+          return token
+        }
+      }
+    } catch {
+      // CSRF endpoint might not exist, continue without token
+    }
+
+    return null
+  }, [])
 
   // Fetch approval by token
   const fetchApproval = useCallback(async (approvalToken: string) => {
@@ -193,6 +240,11 @@ export function useApproval(token?: string): UseApprovalReturn {
           stage: approval.approvalStage,
           hasDeliverable: !!approval.deliverableUrl
         })
+        
+        // Pre-fetch CSRF token for faster submission
+        fetchCsrfToken().catch(() => {
+          // Ignore errors, will retry on submit
+        })
       }
 
     } catch (err) {
@@ -247,12 +299,23 @@ export function useApproval(token?: string): UseApprovalReturn {
     setState(prev => ({ ...prev, isSubmitting: true, submitError: null }))
 
     try {
+      // Fetch CSRF token
+      const csrfToken = await fetchCsrfToken()
+
+      // Build headers with CSRF token
+      const headers: Record<string, string> = {}
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken
+      }
+
       const result = await submitApi.execute(`/api/approvals/${token}`, {
         method: 'POST',
         body: {
           action,
           notes: notes || undefined
-        }
+        },
+        headers,
+        skipAuth: true
       })
 
       if (!result || !result.success) {
