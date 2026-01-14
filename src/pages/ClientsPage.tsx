@@ -30,7 +30,7 @@ interface Client {
 // =============================================================================
 
 export default function ClientsPage() {
-  const api = useApi<{ data: Client[] }>()
+  const api = useApi<Client[]>()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -43,8 +43,9 @@ export default function ClientsPage() {
     setLoading(true)
     try {
       const result = await api.execute('/api/clients')
-      if (result?.data) {
-        setClients(result.data)
+      // result is already unwrapped - it's the array directly
+      if (Array.isArray(result)) {
+        setClients(result)
       }
     } catch (err) {
       console.error('Failed to load clients:', err)
