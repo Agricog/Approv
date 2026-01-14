@@ -1,45 +1,41 @@
 /**
  * Clients Routes
- * CRUD operations for client management
+ * Client management endpoints (authenticated)
  */
 
 import { Router } from 'express'
-import { z } from 'zod'
-import { db } from '../lib/db.js'
+import { prisma } from '../lib/prisma.js'
+import { createLogger, logAudit } from '../lib/logger.js'
+import { 
+  asyncHandler, 
+  NotFoundError,
+  ConflictError,
+  ValidationError
+} from '../middleware/errorHandler.js'
+import { getClientIp } from '../middleware/index.js'
 import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
+const logger = createLogger('clients')
+
+// All client routes require authentication
+router.use(requireAuth)
 
 // =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-const createClientSchema = z.object({
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
-  email: z.string().email().max(255),
-  phone: z.string().max(50).optional(),
-  company: z.string().max(200).optional(),
-  address: z.string().max(500).optional(),
-  notes: z.string().max(1000).optional()
-})
-
-const updateClientSchema = createClientSchema.partial()
-
-// =============================================================================
-// ROUTES
+// LIST & GET
 // =============================================================================
 
 /**
  * GET /api/clients
  * List all clients for the organization
  */
-router.get('/', requireAuth, async (req, res, next) => {
-  try {
-    const { orgId } = req.auth
+router.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const { organizationId } = req
 
-    const clients = await db.client.findMany({
-      where: { organizationId: orgId },
+    const clients = await prisma.client.findMany({
+      where: { organizationId },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -55,201 +51,247 @@ router.get('/', requireAuth, async (req, res, next) => {
       }
     })
 
-    res.json({ items: clients, total: clients.length })
-  } catch (error) {
-    next(error)
-  }
-})
+    res.json({ 
+      items: clients, 
+      total: clients.length 
+    })
+  })
+)
 
 /**
  * GET /api/clients/:id
  * Get single client by ID
  */
-router.get('/:id', requireAuth, async (req, res, next) => {
-  try {
-    const { orgId } = req.auth
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { organizationId } = req
     const { id } = req.params
 
-    const client = await db.client.findFirst({
+    const client = await prisma.client.findFirst({
       where: {
         id,
-        organizationId: orgId
+        organizationId
       }
     })
 
     if (!client) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Client not found' }
-      })
+      throw new NotFoundError('Client')
     }
 
     res.json(client)
-  } catch (error) {
-    next(error)
-  }
-})
+  })
+)
+
+// =============================================================================
+// CREATE & UPDATE
+// =============================================================================
 
 /**
  * POST /api/clients
  * Create a new client
  */
-router.post('/', requireAuth, async (req, res, next) => {
-  try {
-    const { orgId, userId } = req.auth
-    
-    // Validate request body
-    const data = createClientSchema.parse(req.body)
+router.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const { organizationId, user } = req
+    const { firstName, lastName, email, phone, company, address, notes } = req.body
+
+    // Validate required fields
+    if (!firstName || !lastName || !email) {
+      throw new ValidationError('firstName, lastName, and email are required')
+    }
 
     // Check if client with this email already exists in org
-    const existing = await db.client.findFirst({
+    const existing = await prisma.client.findFirst({
       where: {
-        email: data.email,
-        organizationId: orgId
+        email,
+        organizationId
       }
     })
 
     if (existing) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'DUPLICATE_EMAIL', message: 'A client with this email already exists' }
-      })
+      throw new ConflictError('A client with this email already exists')
     }
 
     // Create client
-    const client = await db.client.create({
+    const client = await prisma.client.create({
       data: {
-        ...data,
-        organizationId: orgId,
-        createdBy: userId
+        organizationId: organizationId!,
+        createdBy: user!.id,
+        firstName,
+        lastName,
+        email,
+        phone: phone || null,
+        company: company || null,
+        address: address || null,
+        notes: notes || null
       }
     })
 
-    res.status(201).json(client)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: error.errors }
-      })
-    }
+    // Log audit
+    logAudit({
+      action: 'client.created',
+      entityType: 'client',
+      entityId: client.id,
+      organizationId: organizationId!,
+      userId: user!.id,
+      ipAddress: getClientIp(req),
+      newState: { firstName, lastName, email, company }
+    })
 
-    next(error)
-  }
-})
+    logger.info({
+      clientId: client.id,
+      email,
+      userId: user!.id
+    }, 'Client created')
+
+    res.status(201).json(client)
+  })
+)
 
 /**
  * PUT /api/clients/:id
  * Update client
  */
-router.put('/:id', requireAuth, async (req, res, next) => {
-  try {
-    const { orgId } = req.auth
+router.put(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { organizationId, user } = req
     const { id } = req.params
-
-    // Validate request body
-    const data = updateClientSchema.parse(req.body)
+    const { firstName, lastName, email, phone, company, address, notes } = req.body
 
     // Check client exists and belongs to org
-    const existing = await db.client.findFirst({
+    const existing = await prisma.client.findFirst({
       where: {
         id,
-        organizationId: orgId
+        organizationId
       }
     })
 
     if (!existing) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Client not found' }
-      })
+      throw new NotFoundError('Client')
     }
 
     // If updating email, check it's not taken by another client
-    if (data.email && data.email !== existing.email) {
-      const duplicate = await db.client.findFirst({
+    if (email && email !== existing.email) {
+      const duplicate = await prisma.client.findFirst({
         where: {
-          email: data.email,
-          organizationId: orgId,
+          email,
+          organizationId,
           id: { not: id }
         }
       })
 
       if (duplicate) {
-        return res.status(400).json({
-          success: false,
-          error: { code: 'DUPLICATE_EMAIL', message: 'Another client with this email already exists' }
-        })
+        throw new ConflictError('Another client with this email already exists')
       }
     }
 
+    // Prepare update data
+    const data: any = {}
+    if (firstName !== undefined) data.firstName = firstName
+    if (lastName !== undefined) data.lastName = lastName
+    if (email !== undefined) data.email = email
+    if (phone !== undefined) data.phone = phone
+    if (company !== undefined) data.company = company
+    if (address !== undefined) data.address = address
+    if (notes !== undefined) data.notes = notes
+
     // Update client
-    const client = await db.client.update({
+    const client = await prisma.client.update({
       where: { id },
       data
     })
 
-    res.json(client)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Invalid input', details: error.errors }
-      })
-    }
+    // Log audit
+    logAudit({
+      action: 'client.updated',
+      entityType: 'client',
+      entityId: id,
+      organizationId: organizationId!,
+      userId: user!.id,
+      ipAddress: getClientIp(req),
+      previousState: {
+        firstName: existing.firstName,
+        lastName: existing.lastName,
+        email: existing.email
+      },
+      newState: data
+    })
 
-    next(error)
-  }
-})
+    logger.info({
+      clientId: id,
+      userId: user!.id
+    }, 'Client updated')
+
+    res.json(client)
+  })
+)
 
 /**
  * DELETE /api/clients/:id
  * Delete client (only if no projects exist)
  */
-router.delete('/:id', requireAuth, async (req, res, next) => {
-  try {
-    const { orgId } = req.auth
+router.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { organizationId, user } = req
     const { id } = req.params
 
     // Check client exists and belongs to org
-    const client = await db.client.findFirst({
+    const client = await prisma.client.findFirst({
       where: {
         id,
-        organizationId: orgId
+        organizationId
       }
     })
 
     if (!client) {
-      return res.status(404).json({
-        success: false,
-        error: { code: 'NOT_FOUND', message: 'Client not found' }
-      })
+      throw new NotFoundError('Client')
     }
 
     // Check if client has any projects
-    const projectCount = await db.project.count({
+    const projectCount = await prisma.project.count({
       where: { clientId: id }
     })
 
     if (projectCount > 0) {
-      return res.status(400).json({
-        success: false,
-        error: { 
-          code: 'HAS_PROJECTS', 
-          message: `Cannot delete client with ${projectCount} project(s). Archive projects first.` 
-        }
-      })
+      throw new ValidationError(
+        `Cannot delete client with ${projectCount} project(s). Archive projects first.`
+      )
     }
 
     // Delete client
-    await db.client.delete({
+    await prisma.client.delete({
       where: { id }
     })
 
-    res.json({ success: true, message: 'Client deleted successfully' })
-  } catch (error) {
-    next(error)
-  }
-})
+    // Log audit
+    logAudit({
+      action: 'client.deleted',
+      entityType: 'client',
+      entityId: id,
+      organizationId: organizationId!,
+      userId: user!.id,
+      ipAddress: getClientIp(req),
+      previousState: {
+        firstName: client.firstName,
+        lastName: client.lastName,
+        email: client.email
+      }
+    })
+
+    logger.info({
+      clientId: id,
+      userId: user!.id
+    }, 'Client deleted')
+
+    res.json({ 
+      success: true, 
+      message: 'Client deleted successfully' 
+    })
+  })
+)
 
 export { router as clientRoutes }
