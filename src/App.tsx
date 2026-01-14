@@ -21,6 +21,8 @@ import {
 import ProjectsPage from './pages/ProjectsPage'
 import CreateProjectPage from './pages/CreateProjectPage'
 import CreateApprovalPage from './pages/CreateApprovalPage'
+import ClientsPage from './pages/ClientsPage'
+import CreateClientPage from './pages/CreateClientPage'
 
 // Approval components
 import { ApprovalPage } from './components/approval'
@@ -224,8 +226,18 @@ export default function App() {
 
               {/* Dashboard (protected) */}
               <Route path="/dashboard" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+              
+              {/* Dashboard - Projects */}
               <Route path="/dashboard/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/projects/new" element={<ProtectedRoute><CreateProjectPage /></ProtectedRoute>} />
               <Route path="/dashboard/projects/:projectId" element={<ProtectedRoute><ProjectList /></ProtectedRoute>} />
+              <Route path="/dashboard/projects/:projectId/approvals/new" element={<ProtectedRoute><CreateApprovalPage /></ProtectedRoute>} />
+              
+              {/* Dashboard - Clients */}
+              <Route path="/dashboard/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/clients/new" element={<ProtectedRoute><CreateClientPage /></ProtectedRoute>} />
+              
+              {/* Dashboard - Other */}
               <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
               <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
