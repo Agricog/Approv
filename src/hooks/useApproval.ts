@@ -398,6 +398,3 @@ export function useApprovalStatus(status: ApprovalStatus | undefined) {
 
   return statusConfig[status]
 }
-
-  return statusConfig[status]
-}
