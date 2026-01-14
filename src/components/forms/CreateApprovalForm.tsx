@@ -3,7 +3,6 @@
  * Enterprise-grade form for creating approval requests
  * AUTAIMATE BUILD STANDARD v2 - OWASP 2024 Compliant
  */
-
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Link as LinkIcon, Image, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
@@ -38,20 +37,16 @@ interface FormState {
 
 const APPROVAL_STAGES = [
   { value: 'INITIAL_DRAWINGS', label: 'Initial Concept Drawings' },
-  { value: 'DETAILED_PLANS', label: 'Detailed Plans' },
-  { value: 'PLANNING_APPLICATION', label: 'Planning Application' },
-  { value: 'BUILDING_REGS', label: 'Building Regulations' },
-  { value: 'TENDER_DOCS', label: 'Tender Documents' },
-  { value: 'FINAL_DRAWINGS', label: 'Final Construction Drawings' },
-  { value: 'MATERIAL_SELECTION', label: 'Material Selection' },
-  { value: 'INTERIOR_DESIGN', label: 'Interior Design Proposals' },
+  { value: 'DETAILED_DESIGN', label: 'Detailed Design' },
+  { value: 'PLANNING_PACK', label: 'Planning Pack' },
+  { value: 'FINAL_APPROVAL', label: 'Final Approval' },
   { value: 'CUSTOM', label: 'Custom Stage' }
 ] as const
 
 const DELIVERABLE_TYPES = [
-  { value: 'pdf', label: 'PDF Document', icon: FileText },
-  { value: 'image', label: 'Image/Render', icon: Image },
-  { value: 'link', label: 'External Link', icon: LinkIcon }
+  { value: 'PDF', label: 'PDF Document', icon: FileText },
+  { value: 'IMAGE', label: 'Image/Render', icon: Image },
+  { value: 'LINK', label: 'External Link', icon: LinkIcon }
 ] as const
 
 // =============================================================================
@@ -171,7 +166,7 @@ export default function CreateApprovalForm({
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
           submitData.deliverableName = validation.sanitized.deliverableName || 'Deliverable'
-          submitData.deliverableType = state.data.deliverableType || 'link'
+          submitData.deliverableType = state.data.deliverableType || 'LINK'
         }
       }
 
@@ -210,6 +205,7 @@ export default function CreateApprovalForm({
       Sentry.captureException(err, {
         tags: { component: 'CreateApprovalForm', action: 'submit' }
       })
+
       setState(prev => ({
         ...prev,
         isSubmitting: false,
@@ -284,6 +280,7 @@ export default function CreateApprovalForm({
                 isSuccess: false,
                 createdApproval: null
               })
+              setShowCustomStage(false)
             }}
             className="flex-1 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-200 transition font-medium"
           >
@@ -466,7 +463,7 @@ export default function CreateApprovalForm({
           type="number"
           id="expiryDays"
           value={state.data.expiryDays}
-          onChange={(e) => handleInputChange('expiryDays', parseInt(e.target.value))}
+          onChange={(e) => handleInputChange('expiryDays', parseInt(e.target.value) || 14)}
           min={1}
           max={90}
           className={`w-full px-4 py-2 rounded-lg border ${
