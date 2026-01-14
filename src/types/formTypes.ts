@@ -15,6 +15,7 @@ export interface CreateProjectFormData {
   budget?: number
   startDate?: string
   targetCompletionDate?: string
+  [key: string]: any // Add index signature for TypeScript strict mode
 }
 
 export interface Project {
@@ -46,6 +47,7 @@ export interface CreateApprovalFormData {
   deliverableName?: string
   deliverableType?: 'pdf' | 'image' | 'link'
   expiryDays?: number
+  [key: string]: any // Add index signature for TypeScript strict mode
 }
 
 export interface ApprovalCreatedResponse {
