@@ -7,9 +7,9 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Link as LinkIcon, Image, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import * as Sentry from '@sentry/react'
 import { useApi } from '../../hooks/useApi'
 import { validateForm, APPROVAL_VALIDATION, sanitizeUrl } from '../../utils/formValidation'
-import { captureError } from '../../utils/errorTracking'
 import type { CreateApprovalFormData, ApprovalCreatedResponse } from '../../types/formTypes'
 
 // =============================================================================
@@ -207,7 +207,9 @@ export default function CreateApprovalForm({
       }
 
     } catch (err) {
-      captureError(err, { context: 'CreateApprovalForm.handleSubmit' })
+      Sentry.captureException(err, {
+        tags: { component: 'CreateApprovalForm', action: 'submit' }
+      })
       setState(prev => ({
         ...prev,
         isSubmitting: false,
