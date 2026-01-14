@@ -123,7 +123,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     e.preventDefault()
 
     // Client-side validation
-    const validation = validateForm(state.data as Record<string, any>, PROJECT_VALIDATION)
+    const validation = validateForm(state.data, PROJECT_VALIDATION)
     
     if (!validation.isValid) {
       setState(prev => ({
@@ -179,9 +179,7 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
       }
 
     } catch (err) {
-      if (err instanceof Error) {
-        captureError(err)
-      }
+      captureError(err, { context: 'CreateProjectForm.handleSubmit' })
       setState(prev => ({
         ...prev,
         isSubmitting: false,
