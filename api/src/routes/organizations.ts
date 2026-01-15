@@ -158,7 +158,8 @@ router.put(
 // HELPERS
 // =============================================================================
 
-function isValidUrl(url: string): boolean {
+function isValidUrl(url: string | undefined): boolean {
+  if (!url) return true // Allow empty/undefined
   try {
     new URL(url)
     return true
