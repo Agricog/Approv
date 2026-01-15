@@ -1,4 +1,4 @@
-/**
+ /**
  * ProjectsPage Component
  * Lists all projects for the organization
  * AUTAIMATE BUILD STANDARD v2
@@ -11,20 +11,12 @@ import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
 import type { Project } from '../types/formTypes'
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
 interface ProjectsResponse {
   items: Project[]
   total: number
 }
 
 type ProjectStatusFilter = 'ALL' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
-
-// =============================================================================
-// COMPONENT
-// =============================================================================
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
@@ -36,7 +28,6 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>('ALL')
 
-  // Load projects
   useEffect(() => {
     loadProjects()
   }, [])
@@ -53,7 +44,6 @@ export default function ProjectsPage() {
       if (result?.items) {
         setProjects(result.items)
       } else if (Array.isArray(result)) {
-        // Handle if API returns array directly
         setProjects(result as unknown as Project[])
       } else {
         setProjects([])
@@ -68,7 +58,6 @@ export default function ProjectsPage() {
     }
   }
 
-  // Filter projects
   const filteredProjects = projects.filter(project => {
     const matchesSearch = 
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -80,7 +69,6 @@ export default function ProjectsPage() {
     return matchesSearch && matchesStatus
   })
 
-  // Format date
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Not set'
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -90,7 +78,6 @@ export default function ProjectsPage() {
     })
   }
 
-  // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -106,6 +93,15 @@ export default function ProjectsPage() {
     }
   }
 
+  const goToProject = (id: string) => {
+    navigate('/dashboard/projects/' + id)
+  }
+
+  const goToCreateApproval = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    navigate('/dashboard/projects/' + id + '/approvals/new')
+  }
+
   return (
     <>
       <Helmet>
@@ -115,7 +111,6 @@ export default function ProjectsPage() {
       </Helmet>
 
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between">
@@ -136,12 +131,9 @@ export default function ProjectsPage() {
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          {/* Search and Filters */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex flex-col sm:flex-row gap-4">
-              {/* Search */}
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -153,7 +145,6 @@ export default function ProjectsPage() {
                 />
               </div>
 
-              {/* Status Filter */}
               <div className="flex items-center gap-2">
                 <Filter className="w-5 h-5 text-gray-400" />
                 <select
@@ -171,7 +162,6 @@ export default function ProjectsPage() {
             </div>
           </div>
 
-          {/* Loading State */}
           {loading && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
@@ -179,7 +169,6 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* Error State */}
           {error && !loading && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
               <div className="flex items-start gap-3">
@@ -198,7 +187,6 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* Empty State */}
           {!loading && !error && projects.length === 0 && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
               <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -214,7 +202,6 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* No Results */}
           {!loading && !error && projects.length > 0 && filteredProjects.length === 0 && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
               <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -223,18 +210,16 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* Projects Grid */}
           {!loading && !error && filteredProjects.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project) => (
                 <div
                   key={project.id}
-                  onClick={() => navigate(`/dashboard/projects/${project.id}`)}
+                  onClick={() => goToProject(project.id)}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition cursor-pointer"
                 >
-                  {/* Status Badge */}
                   <div className="flex items-center justify-between mb-4">
-                    <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${getStatusColor(project.status)}`}>
+                    <span className={'text-xs font-medium px-2.5 py-0.5 rounded-full ' + getStatusColor(project.status)}>
                       {project.status}
                     </span>
                     <span className="text-xs font-mono text-gray-500">
@@ -242,19 +227,16 @@ export default function ProjectsPage() {
                     </span>
                   </div>
 
-                  {/* Project Name */}
                   <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
                     {project.name}
                   </h3>
 
-                  {/* Description */}
                   {project.description && (
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                       {project.description}
                     </p>
                   )}
 
-                  {/* Metadata */}
                   <div className="space-y-2 text-sm text-gray-500">
                     {project.startDate && (
                       <div className="flex items-center gap-2">
@@ -270,13 +252,9 @@ export default function ProjectsPage() {
                     )}
                   </div>
 
-                  {/* Footer */}
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/dashboard/projects/${project.id}/approvals/new`)
-                      }}
+                      onClick={(e) => goToCreateApproval(e, project.id)}
                       className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                     >
                       + Create Approval
@@ -287,7 +265,6 @@ export default function ProjectsPage() {
             </div>
           )}
 
-          {/* Results Count */}
           {!loading && !error && filteredProjects.length > 0 && (
             <div className="mt-6 text-center text-sm text-gray-500">
               Showing {filteredProjects.length} of {projects.length} projects
