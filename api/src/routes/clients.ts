@@ -241,18 +241,13 @@ router.delete(
       where: { organizationId }
     })
 
-    iif (clientCount === 0) {
+    if (clientCount === 0) {
       res.json({
         success: true,
         deleted: 0,
         message: 'No clients to delete'
       })
       return
-    }
-        success: true,
-        deleted: 0,
-        message: 'No clients to delete'
-      })
     }
 
     // First delete all approvals for clients in this org
