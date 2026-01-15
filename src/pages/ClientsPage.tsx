@@ -3,8 +3,8 @@
  * List and manage clients
  */
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Plus, Search, UserCircle, Mail, Building2, Phone, MoreVertical, Loader2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Plus, Search, UserCircle, Mail, Building2, Phone, MoreVertical, Loader2, Trash2, ArrowLeft, AlertTriangle } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 
 // =============================================================================
@@ -30,10 +30,15 @@ interface Client {
 // =============================================================================
 
 export default function ClientsPage() {
+  const navigate = useNavigate()
   const api = useApi<Client[]>()
+  const deleteApi = useApi<{ deleted: number }>()
+  
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     loadClients()
@@ -43,7 +48,6 @@ export default function ClientsPage() {
     setLoading(true)
     try {
       const result = await api.execute('/api/clients')
-      // Handle both formats: { items: [...] } or direct array
       if (result && typeof result === 'object' && 'items' in result) {
         setClients((result as { items: Client[] }).items)
       } else if (Array.isArray(result)) {
@@ -53,6 +57,21 @@ export default function ClientsPage() {
       console.error('Failed to load clients:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteAllClients = async () => {
+    setDeleting(true)
+    try {
+      await deleteApi.execute('/api/clients/delete-all', {
+        method: 'DELETE'
+      })
+      setClients([])
+      setShowDeleteModal(false)
+    } catch (err) {
+      console.error('Failed to delete clients:', err)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -68,19 +87,39 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/dashboard')}
+        className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Dashboard
+      </button>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
           <p className="text-gray-600 mt-1">Manage your client contacts</p>
         </div>
-        <Link
-          to="/dashboard/clients/new"
-          className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
-        >
-          <Plus size={20} />
-          Add Client
-        </Link>
+        <div className="flex items-center gap-3">
+          {clients.length > 0 && (
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg hover:bg-red-200 transition font-medium"
+            >
+              <Trash2 size={20} />
+              Delete All
+            </button>
+          )}
+          <Link
+            to="/dashboard/clients/new"
+            className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
+          >
+            <Plus size={20} />
+            Add Client
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -157,7 +196,7 @@ export default function ClientsPage() {
                         </div>
                         <div>
                           <Link 
-                            to={`/dashboard/clients/${client.id}`}
+                            to={'/dashboard/clients/' + client.id}
                             className="font-medium text-gray-900 hover:text-green-600"
                           >
                             {client.firstName} {client.lastName}
@@ -169,14 +208,14 @@ export default function ClientsPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
                           <Mail size={14} />
-                          <a href={`mailto:${client.email}`} className="hover:text-green-600">
+                          <a href={'mailto:' + client.email} className="hover:text-green-600">
                             {client.email}
                           </a>
                         </div>
                         {client.phone && (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Phone size={14} />
-                            <a href={`tel:${client.phone}`} className="hover:text-green-600">
+                            <a href={'tel:' + client.phone} className="hover:text-green-600">
                               {client.phone}
                             </a>
                           </div>
@@ -200,7 +239,7 @@ export default function ClientsPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link
-                        to={`/dashboard/clients/${client.id}`}
+                        to={'/dashboard/clients/' + client.id}
                         className="text-gray-400 hover:text-gray-600"
                       >
                         <MoreVertical size={20} />
@@ -210,6 +249,54 @@ export default function ClientsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete All Clients</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete all {clients.length} clients? This will also remove them from any associated projects.
+            </p>
+            
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAllClients}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Delete All
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
