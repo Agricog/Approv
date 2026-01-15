@@ -140,16 +140,13 @@ export async function getSignedUploadUrl(
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
-      ContentType: contentType,
-      Metadata: {
-        originalName: filename,
-        organizationId: metadata.organizationId,
-        projectId: metadata.projectId || '',
-        approvalId: metadata.approvalId || '',
-      },
+      ContentType: contentType
     })
 
-    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+    const uploadUrl = await getSignedUrl(s3Client, command, { 
+      expiresIn: 3600,
+      signableHeaders: new Set(['content-type', 'host'])
+    })
 
     logger.info({ key, contentType }, 'Signed upload URL generated')
 
@@ -159,7 +156,6 @@ export async function getSignedUploadUrl(
     return null
   }
 }
-
 /**
  * Delete a file from R2
  */
