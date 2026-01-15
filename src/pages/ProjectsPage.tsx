@@ -1,12 +1,11 @@
- /**
+/**
  * ProjectsPage Component
  * Lists all projects for the organization
- * AUTAIMATE BUILD STANDARD v2
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { Plus, Search, Briefcase, Calendar, AlertCircle, Loader2, Filter } from 'lucide-react'
+import { Plus, Search, Briefcase, Calendar, AlertCircle, Loader2, Filter, ArrowLeft } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
 import type { Project } from '../types/formTypes'
@@ -113,6 +112,14 @@ export default function ProjectsPage() {
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition mb-4"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Dashboard
+            </button>
+            
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
