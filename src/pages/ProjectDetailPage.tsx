@@ -4,16 +4,12 @@
  */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Helmet } from 'react-helmet-async'
 import { 
   ArrowLeft, 
   Plus, 
   Calendar, 
   User, 
   Building2, 
-  Clock,
-  CheckCircle2,
-  XCircle,
   AlertCircle,
   Loader2,
   Send,
@@ -56,6 +52,21 @@ interface Project {
   approvals: Approval[]
   createdAt: string
   updatedAt: string
+}
+
+function ApprovalLink(props: { token: string }) {
+  const url = 'https://approv.co.uk/approve/' + props.token
+  return (
+    
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+    >
+      View Link
+      <ExternalLink className="w-3 h-3" />
+    </a>
+  )
 }
 
 export default function ProjectDetailPage() {
@@ -325,15 +336,7 @@ export default function ProjectDetailPage() {
 
                         <div className="flex items-center gap-2">
                           {approval.status === 'PENDING' && approval.token && (
-                            
-                              href={'https://approv.co.uk/approve/' + approval.token}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                            >
-                              View Link
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
+                            <ApprovalLink token={approval.token} />
                           )}
                         </div>
                       </div>
@@ -348,3 +351,4 @@ export default function ProjectDetailPage() {
     </div>
   )
 }
+
