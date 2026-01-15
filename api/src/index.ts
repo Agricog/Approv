@@ -199,7 +199,7 @@ app.use('/api/csrf-token', csrfRoutes)
 app.use('/api/webhooks', webhookRoutes)
 
 // Protected routes (require CSRF for mutations)
-app.use('/api/approvals', csrfProtection, approvalRoutes)
+app.use('/api/approvals', approvalRoutes)
 app.use('/api/projects', csrfProtection, projectRoutes)
 app.use('/api/clients', csrfProtection, clientRoutes) // ← NEW: Clients endpoint
 app.use('/api/dashboard', csrfProtection, dashboardRoutes)
