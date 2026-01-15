@@ -2,8 +2,7 @@
  * Prisma Client
  * Singleton instance with connection pooling for Neon PostgreSQL
  */
-
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { createLogger } from './logger.js'
 
 const logger = createLogger('prisma')
@@ -34,7 +33,6 @@ const prismaClientSingleton = (): PrismaClient => {
       }
     ],
     
-    // Connection pool settings for Neon
     datasources: {
       db: {
         url: process.env.DATABASE_URL
@@ -47,7 +45,6 @@ const prismaClientSingleton = (): PrismaClient => {
 // SINGLETON INSTANCE
 // =============================================================================
 
-// Use global variable in development to prevent multiple instances during hot reload
 export const prisma = globalThis.__prisma ?? prismaClientSingleton()
 
 if (process.env.NODE_ENV !== 'production') {
@@ -58,23 +55,20 @@ if (process.env.NODE_ENV !== 'production') {
 // LOGGING SETUP
 // =============================================================================
 
-// Query logging in development
 if (process.env.NODE_ENV === 'development') {
   prisma.$on('query' as never, (e: { query: string; params: string; duration: number }) => {
     logger.debug({
       query: e.query,
       params: e.params,
-      duration: `${e.duration}ms`
+      duration: e.duration + 'ms'
     }, 'Database query')
   })
 }
 
-// Error logging
 prisma.$on('error' as never, (e: { message: string }) => {
   logger.error({ error: e.message }, 'Database error')
 })
 
-// Warning logging
 prisma.$on('warn' as never, (e: { message: string }) => {
   logger.warn({ warning: e.message }, 'Database warning')
 })
@@ -83,9 +77,6 @@ prisma.$on('warn' as never, (e: { message: string }) => {
 // CONNECTION MANAGEMENT
 // =============================================================================
 
-/**
- * Connect to database
- */
 export async function connectDatabase(): Promise<void> {
   try {
     await prisma.$connect()
@@ -96,9 +87,6 @@ export async function connectDatabase(): Promise<void> {
   }
 }
 
-/**
- * Disconnect from database
- */
 export async function disconnectDatabase(): Promise<void> {
   try {
     await prisma.$disconnect()
@@ -112,9 +100,6 @@ export async function disconnectDatabase(): Promise<void> {
 // HEALTH CHECK
 // =============================================================================
 
-/**
- * Check database health
- */
 export async function checkDatabaseHealth(): Promise<{
   healthy: boolean
   latency?: number
@@ -144,17 +129,14 @@ export async function checkDatabaseHealth(): Promise<{
 // TRANSACTION HELPER
 // =============================================================================
 
-/**
- * Execute operations in a transaction
- */
 export async function withTransaction<T>(
   fn: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
     return fn(tx)
   }, {
-    maxWait: 5000, // 5s max wait to start transaction
-    timeout: 10000 // 10s max transaction duration
+    maxWait: 5000,
+    timeout: 10000
   })
 }
 
@@ -162,7 +144,6 @@ export async function withTransaction<T>(
 // GRACEFUL SHUTDOWN
 // =============================================================================
 
-// Handle shutdown signals
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, 'Shutting down database connection')
   await disconnectDatabase()
@@ -170,4 +151,5 @@ const shutdown = async (signal: string): Promise<void> => {
 
 process.on('beforeExit', () => shutdown('beforeExit'))
 
+export { Prisma }
 export default prisma
