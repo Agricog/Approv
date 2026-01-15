@@ -14,7 +14,8 @@ import {
   Loader2,
   Send,
   Eye,
-  ExternalLink
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
@@ -36,6 +37,7 @@ interface Approval {
   createdAt: string
   expiresAt: string | null
   respondedAt: string | null
+  responseNotes: string | null
   viewCount: number
   reminderCount: number
 }
@@ -57,7 +59,7 @@ interface Project {
 function ApprovalLink(props: { token: string }) {
   const url = 'https://approv.co.uk/approve/' + props.token
   return (
-    <a
+    
       href={url}
       target="_blank"
       rel="noopener noreferrer"
@@ -327,8 +329,18 @@ export default function ProjectDetailPage() {
                             </p>
                           )}
 
+                          {approval.responseNotes && (
+                            <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+                                <MessageSquare className="w-4 h-4" />
+                                Client Feedback
+                              </div>
+                              <p className="text-sm text-gray-600">{approval.responseNotes}</p>
+                            </div>
+                          )}
+
                           {approval.status === 'PENDING' && approval.expiresAt && (
-                            <p className="text-sm text-amber-600 mt-1">
+                            <p className="text-sm text-amber-600 mt-2">
                               Expires: {formatDate(approval.expiresAt)}
                             </p>
                           )}
