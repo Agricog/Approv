@@ -326,14 +326,14 @@ export default function CreateApprovalForm({
         // For uploaded files, store the R2 key (prefixed with r2:)
         submitData.deliverableUrl = 'r2:' + uploadState.uploadedKey
         submitData.deliverableName = uploadState.file?.name || 'Deliverable'
-        submitData.deliverableType = state.data.deliverableType || 'pdf'
+        submitData.deliverableType = (state.data.deliverableType || 'pdf').toUpperCase() as any
       } else if (state.data.deliverableUrl) {
         // For external links, store the URL directly
         const sanitizedUrl = sanitizeUrl(state.data.deliverableUrl)
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
           submitData.deliverableName = validation.sanitized.deliverableName || 'Deliverable'
-          submitData.deliverableType = state.data.deliverableType || 'link'
+          submitData.deliverableType = (state.data.deliverableType || 'link').toUpperCase() as any
         }
       }
 
