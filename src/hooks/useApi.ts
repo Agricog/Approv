@@ -73,10 +73,10 @@ async function getCsrfToken(authToken: string | null): Promise<string | null> {
     }
     
     if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`
+      headers['Authorization'] = 'Bearer ' + authToken
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+    const response = await fetch(API_BASE_URL + '/api/csrf-token', {
       method: 'GET',
       credentials: 'include',
       headers
@@ -143,7 +143,7 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
     } = options
 
     // Build full URL
-    const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+    const url = API_BASE_URL + (endpoint.startsWith('/') ? endpoint : '/' + endpoint)
 
     // Create abort controller for timeout
     const controller = new AbortController()
@@ -161,7 +161,7 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
         try {
           authToken = await getToken()
           if (authToken) {
-            requestHeaders['Authorization'] = `Bearer ${authToken}`
+            requestHeaders['Authorization'] = 'Bearer ' + authToken
           }
         } catch {
           // Continue without token
@@ -220,7 +220,7 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
         }
 
         const error: ApiError = {
-          code: errorData.code || `HTTP_${response.status}`,
+          code: errorData.code || 'HTTP_' + response.status,
           message: errorData.message || getDefaultErrorMessage(response.status),
           status: response.status
         }
