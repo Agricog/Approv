@@ -43,8 +43,10 @@ export default function ClientsPage() {
     setLoading(true)
     try {
       const result = await api.execute('/api/clients')
-      // result is already unwrapped - it's the array directly
-      if (Array.isArray(result)) {
+      // Handle both formats: { items: [...] } or direct array
+      if (result && typeof result === 'object' && 'items' in result) {
+        setClients((result as { items: Client[] }).items)
+      } else if (Array.isArray(result)) {
         setClients(result)
       }
     } catch (err) {
