@@ -209,6 +209,7 @@ app.use('/api/portal', csrfProtection, portalRoutes)
 app.use('/api/uploads', csrfProtection, uploadRoutes)
 app.use('/api/dropbox', csrfProtection, dropboxRoutes)
 app.use('/api/monday', csrfProtection, mondayRoutes)
+app.use('/api/organizations', organizationRoutes)
 app.use('/api/activity', activityRoutes)
 app.use('/api/notifications', csrfProtection, notificationRoutes)
 
