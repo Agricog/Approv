@@ -266,10 +266,6 @@ export default function CreateApprovalForm({
         uploadedUrl: confirmResult.downloadUrl
       })
 
-      // Update form with uploaded file URL
-      handleInputChange('deliverableUrl', confirmResult.downloadUrl)
-      handleInputChange('deliverableName', file.name)
-
     } catch (err) {
       Sentry.captureException(err, {
         tags: { component: 'CreateApprovalForm', action: 'fileUpload' }
@@ -280,7 +276,7 @@ export default function CreateApprovalForm({
         error: err instanceof Error ? err.message : 'Upload failed'
       }))
     }
-  }, [state.data.deliverableType, projectId, presignApi, api, handleInputChange])
+  }, [state.data.deliverableType, projectId, presignApi, api])
 
   // Remove uploaded file
   const handleRemoveFile = useCallback(() => {
@@ -326,11 +322,13 @@ export default function CreateApprovalForm({
       }
 
       // Add deliverable info if provided
-      if (uploadState.uploadedUrl) {
-        submitData.deliverableUrl = uploadState.uploadedUrl
+      if (uploadState.uploadedKey) {
+        // For uploaded files, store the R2 key (prefixed with r2:)
+        submitData.deliverableUrl = 'r2:' + uploadState.uploadedKey
         submitData.deliverableName = uploadState.file?.name || 'Deliverable'
         submitData.deliverableType = state.data.deliverableType || 'pdf'
       } else if (state.data.deliverableUrl) {
+        // For external links, store the URL directly
         const sanitizedUrl = sanitizeUrl(state.data.deliverableUrl)
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
