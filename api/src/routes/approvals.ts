@@ -3,7 +3,6 @@
  * Core approval workflow endpoints
  * Public (token-based) and authenticated access
  */
-
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { createLogger, logAudit } from '../lib/logger.js'
@@ -21,6 +20,7 @@ import {
 } from '../middleware/index.js'
 import { approvalRateLimiter } from '../middleware/rateLimit.js'
 import { requireAuth, requireProjectAccess } from '../middleware/auth.js'
+import { csrfProtection } from '../middleware/csrf.js'
 import { 
   sendApprovalConfirmation, 
   sendTeamNotification,
@@ -32,7 +32,7 @@ const router = Router()
 const logger = createLogger('approvals')
 
 // =============================================================================
-// AUTHENTICATED ROUTES (must come before token routes to avoid conflicts)
+// AUTHENTICATED ROUTES (with CSRF protection)
 // =============================================================================
 
 /**
@@ -41,6 +41,7 @@ const logger = createLogger('approvals')
  */
 router.post(
   '/',
+  csrfProtection,
   requireAuth,
   asyncHandler(async (req, res) => {
     const { organizationId, user } = req
@@ -131,6 +132,7 @@ router.post(
  */
 router.get(
   '/',
+  csrfProtection,
   requireAuth,
   asyncHandler(async (req, res) => {
     const { organizationId } = req
@@ -208,6 +210,7 @@ router.get(
  */
 router.post(
   '/:id/remind',
+  csrfProtection,
   requireAuth,
   asyncHandler(async (req, res) => {
     const { id } = req.params
@@ -284,7 +287,7 @@ router.post(
 )
 
 // =============================================================================
-// PUBLIC ROUTES (Token-based access)
+// PUBLIC ROUTES (Token-based access - NO CSRF)
 // =============================================================================
 
 /**
@@ -387,7 +390,7 @@ router.get(
 
 /**
  * POST /api/approvals/:token/respond
- * Submit approval response (public)
+ * Submit approval response (public - NO CSRF, token acts as auth)
  */
 router.post(
   '/:token/respond',
