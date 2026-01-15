@@ -3,8 +3,8 @@
  * Pino-based logging with PII redaction
  * SECURITY: Never log sensitive data
  */
-
 import pino from 'pino'
+import { prisma } from './prisma.js'
 
 // =============================================================================
 // CONFIGURATION
@@ -18,7 +18,6 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 // =============================================================================
 
 const REDACT_PATHS = [
-  // Authentication
   'password',
   'token',
   'apiKey',
@@ -29,16 +28,12 @@ const REDACT_PATHS = [
   'authorization',
   'auth',
   'bearer',
-  
-  // Personal info
   'email',
   'phone',
   'mobile',
   'address',
   'ssn',
   'nationalInsurance',
-  
-  // Financial
   'creditCard',
   'credit_card',
   'cardNumber',
@@ -46,14 +41,10 @@ const REDACT_PATHS = [
   'cvv',
   'cvc',
   'bankAccount',
-  
-  // Session/Cookies
   'cookie',
   'session',
   'sessionId',
   'session_id',
-  
-  // Nested paths
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-csrf-token"]',
@@ -66,8 +57,6 @@ const REDACT_PATHS = [
   'user.email',
   'client.email',
   'client.phone',
-  
-  // Wildcard patterns
   '*.password',
   '*.token',
   '*.apiKey',
@@ -82,14 +71,10 @@ const REDACT_PATHS = [
 
 const baseLogger = pino({
   level: LOG_LEVEL,
-  
-  // Redact sensitive fields
   redact: {
     paths: REDACT_PATHS,
     censor: '[REDACTED]'
   },
-  
-  // Formatting
   formatters: {
     level: (label) => ({ level: label }),
     bindings: (bindings) => ({
@@ -98,11 +83,7 @@ const baseLogger = pino({
       env: process.env.NODE_ENV
     })
   },
-  
-  // Timestamp
   timestamp: pino.stdTimeFunctions.isoTime,
-  
-  // Pretty print in development
   transport: IS_PRODUCTION ? undefined : {
     target: 'pino-pretty',
     options: {
@@ -111,8 +92,6 @@ const baseLogger = pino({
       ignore: 'pid,hostname'
     }
   },
-  
-  // Base context
   base: {
     service: 'approv-api',
     version: process.env.npm_package_version || '1.0.0'
@@ -123,9 +102,6 @@ const baseLogger = pino({
 // CHILD LOGGER FACTORY
 // =============================================================================
 
-/**
- * Create a child logger with context
- */
 export function createLogger(context: string): pino.Logger {
   return baseLogger.child({ context })
 }
@@ -134,14 +110,10 @@ export function createLogger(context: string): pino.Logger {
 // SAFE LOGGING HELPERS
 // =============================================================================
 
-/**
- * Safely log an object, removing any PII
- */
 export function safeLog(obj: Record<string, unknown>): Record<string, unknown> {
   const safe: Record<string, unknown> = {}
   
   for (const [key, value] of Object.entries(obj)) {
-    // Check if key matches PII patterns
     if (isPiiKey(key)) {
       safe[key] = '[REDACTED]'
     } else if (typeof value === 'object' && value !== null) {
@@ -176,9 +148,6 @@ function isPiiKey(key: string): boolean {
   return piiPatterns.some(pattern => pattern.test(key))
 }
 
-/**
- * Mask sensitive string values
- */
 export function maskValue(value: string, visibleChars = 4): string {
   if (value.length <= visibleChars * 2) {
     return '*'.repeat(value.length)
@@ -188,12 +157,9 @@ export function maskValue(value: string, visibleChars = 4): string {
   const end = value.substring(value.length - visibleChars)
   const masked = '*'.repeat(Math.min(value.length - visibleChars * 2, 8))
   
-  return `${start}${masked}${end}`
+  return start + masked + end
 }
 
-/**
- * Log with automatic PII removal
- */
 export function secureLog(
   logger: pino.Logger,
   level: 'debug' | 'info' | 'warn' | 'error',
@@ -215,6 +181,8 @@ interface AuditLogEntry {
   entityId: string
   userId?: string
   organizationId?: string
+  projectId?: string
+  approvalId?: string
   ipAddress?: string
   userAgent?: string
   metadata?: Record<string, unknown>
@@ -223,9 +191,10 @@ interface AuditLogEntry {
 }
 
 /**
- * Log audit trail entry
+ * Log audit trail entry - writes to database AND console
  */
 export function logAudit(entry: AuditLogEntry): void {
+  // Log to console
   auditLogger.info({
     audit: true,
     action: entry.action,
@@ -236,16 +205,32 @@ export function logAudit(entry: AuditLogEntry): void {
     actor: {
       userId: entry.userId,
       organizationId: entry.organizationId,
-      ip: entry.ipAddress,
-      userAgent: entry.userAgent
+      ip: entry.ipAddress
     },
-    // Redact any PII in metadata
-    metadata: entry.metadata ? safeLog(entry.metadata) : undefined,
-    changes: {
-      previous: entry.previousState ? safeLog(entry.previousState) : undefined,
-      new: entry.newState ? safeLog(entry.newState) : undefined
-    }
-  }, `Audit: ${entry.action}`)
+    metadata: entry.metadata ? safeLog(entry.metadata) : undefined
+  }, 'Audit: ' + entry.action)
+
+  // Write to database (async, non-blocking)
+  if (entry.organizationId) {
+    prisma.auditLog.create({
+      data: {
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        organizationId: entry.organizationId,
+        userId: entry.userId || null,
+        projectId: entry.projectId || null,
+        approvalId: entry.approvalId || null,
+        ipAddress: entry.ipAddress || null,
+        userAgent: entry.userAgent || null,
+        metadata: entry.metadata || null,
+        previousState: entry.previousState ? safeLog(entry.previousState) : null,
+        newState: entry.newState ? safeLog(entry.newState) : null
+      }
+    }).catch(err => {
+      auditLogger.error({ err, entry }, 'Failed to write audit log to database')
+    })
+  }
 }
 
 // =============================================================================
