@@ -69,14 +69,14 @@ const APPROVAL_STAGES = [
 ] as const
 
 const DELIVERABLE_TYPES = [
-  { value: 'pdf', label: 'PDF Document', icon: FileText },
-  { value: 'image', label: 'Image/Render', icon: Image },
-  { value: 'link', label: 'External Link', icon: LinkIcon }
+  { value: 'PDF', label: 'PDF Document', icon: FileText },
+  { value: 'IMAGE', label: 'Image/Render', icon: Image },
+  { value: 'LINK', label: 'External Link', icon: LinkIcon }
 ] as const
 
 const ALLOWED_FILE_TYPES: Record<string, string[]> = {
-  pdf: ['application/pdf'],
-  image: ['image/jpeg', 'image/png', 'image/webp']
+  PDF: ['application/pdf'],
+  IMAGE: ['image/jpeg', 'image/png', 'image/webp']
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -186,7 +186,7 @@ export default function CreateApprovalForm({
     // Validate file type
     const allowedTypes = state.data.deliverableType 
       ? ALLOWED_FILE_TYPES[state.data.deliverableType] || []
-      : [...ALLOWED_FILE_TYPES.pdf, ...ALLOWED_FILE_TYPES.image]
+      : [...ALLOWED_FILE_TYPES.PDF, ...ALLOWED_FILE_TYPES.IMAGE]
 
     if (!allowedTypes.includes(file.type)) {
       setUploadState(prev => ({
@@ -326,14 +326,14 @@ export default function CreateApprovalForm({
         // For uploaded files, store the R2 key (prefixed with r2:)
         submitData.deliverableUrl = 'r2:' + uploadState.uploadedKey
         submitData.deliverableName = uploadState.file?.name || 'Deliverable'
-        submitData.deliverableType = state.data.deliverableType || 'pdf'
+        submitData.deliverableType = state.data.deliverableType || 'PDF'
       } else if (state.data.deliverableUrl) {
         // For external links, store the URL directly
         const sanitizedUrl = sanitizeUrl(state.data.deliverableUrl)
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
           submitData.deliverableName = validation.sanitized.deliverableName || 'Deliverable'
-          submitData.deliverableType = state.data.deliverableType || 'link'
+          submitData.deliverableType = state.data.deliverableType || 'LINK'
         }
       }
 
@@ -567,9 +567,9 @@ export default function CreateApprovalForm({
                 type="button"
                 onClick={() => {
                   handleInputChange('deliverableType', type.value)
-                  setUseFileUpload(type.value !== 'link')
+                  setUseFileUpload(type.value !== 'LINK')
                   // Reset upload state when changing type
-                  if (type.value === 'link') {
+                  if (type.value === 'LINK') {
                     handleRemoveFile()
                   }
                 }}
@@ -592,7 +592,7 @@ export default function CreateApprovalForm({
       {/* File Upload or URL Input */}
       {state.data.deliverableType && (
         <>
-          {state.data.deliverableType !== 'link' && useFileUpload ? (
+          {state.data.deliverableType !== 'LINK' && useFileUpload ? (
             /* File Upload Section */
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -652,7 +652,7 @@ export default function CreateApprovalForm({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={state.data.deliverableType === 'pdf' ? '.pdf' : '.jpg,.jpeg,.png,.webp'}
+                    accept={state.data.deliverableType === 'PDF' ? '.pdf' : '.jpg,.jpeg,.png,.webp'}
                     onChange={handleFileSelect}
                     className="hidden"
                   />
@@ -661,7 +661,7 @@ export default function CreateApprovalForm({
                     Click to upload or drag and drop
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    {state.data.deliverableType === 'pdf' ? 'PDF up to 10MB' : 'JPG, PNG, WebP up to 10MB'}
+                    {state.data.deliverableType === 'PDF' ? 'PDF up to 10MB' : 'JPG, PNG, WebP up to 10MB'}
                   </p>
                 </div>
               )}
@@ -723,7 +723,7 @@ export default function CreateApprovalForm({
               </div>
 
               {/* Option to upload file instead */}
-              {state.data.deliverableType !== 'link' && (
+              {state.data.deliverableType !== 'LINK' && (
                 <button
                   type="button"
                   onClick={() => setUseFileUpload(true)}
@@ -792,6 +792,15 @@ export default function CreateApprovalForm({
     </form>
   )
 }
+
+
+
+
+
+
+
+
+
 
 
 
