@@ -2,7 +2,6 @@
  * useApproval Hook
  * Manages approval fetching and submission state
  */
-
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useApi } from './useApi'
 import { captureApprovalError, addActionBreadcrumb } from '../utils/errorTracking'
@@ -143,7 +142,6 @@ export function useApproval(token?: string): UseApprovalReturn {
     } catch (err) {
       console.error('Failed to fetch CSRF token:', err)
     }
-
     return null
   }, [])
 
@@ -215,7 +213,6 @@ export function useApproval(token?: string): UseApprovalReturn {
         
         fetchCsrfToken().catch(() => {})
       }
-
     } catch (err) {
       captureApprovalError(err, 'fetchApproval', undefined)
       
@@ -266,7 +263,7 @@ export function useApproval(token?: string): UseApprovalReturn {
 
     try {
       const csrfToken = await fetchCsrfToken()
-
+      
       const headers: Record<string, string> = {}
       if (csrfToken) {
         headers['x-csrf-token'] = csrfToken
@@ -292,7 +289,6 @@ export function useApproval(token?: string): UseApprovalReturn {
       }
 
       const responseTimeHours = getDaysPending(state.approval.createdAt) * 24
-
       const analyticsAction = action === 'approve' ? 'approved' : 'changes_requested'
       trackApprovalSubmitted(state.approval.approvalStage, analyticsAction, responseTimeHours)
       addActionBreadcrumb(`Approval ${action}`, 'approval', {
@@ -312,10 +308,10 @@ export function useApproval(token?: string): UseApprovalReturn {
       }))
 
       return true
-
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit approval'
       captureApprovalError(err, 'submitApproval', state.approval.id)
+      
       setState(prev => ({
         ...prev,
         isSubmitting: false,
