@@ -1,11 +1,22 @@
 /**
  * CreateApprovalForm Component
- * Enterprise-grade form for creating approval requests
+ * Enterprise-grade form for creating approval requests with file upload
  * AUTAIMATE BUILD STANDARD v2 - OWASP 2024 Compliant
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Link as LinkIcon, Image, Calendar, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { 
+  FileText, 
+  Link as LinkIcon, 
+  Image, 
+  Calendar, 
+  AlertCircle, 
+  CheckCircle2, 
+  Loader2,
+  Upload,
+  X,
+  File
+} from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../../hooks/useApi'
 import { validateForm, APPROVAL_VALIDATION, sanitizeUrl } from '../../utils/formValidation'
@@ -31,6 +42,20 @@ interface FormState {
   createdApproval: ApprovalCreatedResponse | null
 }
 
+interface UploadState {
+  file: File | null
+  uploading: boolean
+  progress: number
+  error: string | null
+  uploadedKey: string | null
+  uploadedUrl: string | null
+}
+
+interface PresignResponse {
+  key: string
+  uploadUrl: string
+}
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -49,6 +74,13 @@ const DELIVERABLE_TYPES = [
   { value: 'link', label: 'External Link', icon: LinkIcon }
 ] as const
 
+const ALLOWED_FILE_TYPES: Record<string, string[]> = {
+  pdf: ['application/pdf'],
+  image: ['image/jpeg', 'image/png', 'image/webp']
+}
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
 // =============================================================================
 // COMPONENT
 // =============================================================================
@@ -61,6 +93,8 @@ export default function CreateApprovalForm({
 }: CreateApprovalFormProps) {
   const navigate = useNavigate()
   const api = useApi<ApprovalCreatedResponse>()
+  const presignApi = useApi<PresignResponse>()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [state, setState] = useState<FormState>({
     data: {
@@ -79,7 +113,17 @@ export default function CreateApprovalForm({
     createdApproval: null
   })
 
+  const [uploadState, setUploadState] = useState<UploadState>({
+    file: null,
+    uploading: false,
+    progress: 0,
+    error: null,
+    uploadedKey: null,
+    uploadedUrl: null
+  })
+
   const [showCustomStage, setShowCustomStage] = useState(false)
+  const [useFileUpload, setUseFileUpload] = useState(true)
 
   // Handle stage selection
   const handleStageChange = useCallback((value: string) => {
@@ -134,6 +178,127 @@ export default function CreateApprovalForm({
     }))
   }, [])
 
+  // Handle file selection
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = state.data.deliverableType 
+      ? ALLOWED_FILE_TYPES[state.data.deliverableType] || []
+      : [...ALLOWED_FILE_TYPES.pdf, ...ALLOWED_FILE_TYPES.image]
+
+    if (!allowedTypes.includes(file.type)) {
+      setUploadState(prev => ({
+        ...prev,
+        error: 'File type not allowed. Please upload a PDF or image file.'
+      }))
+      return
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadState(prev => ({
+        ...prev,
+        error: 'File too large. Maximum size is 10MB.'
+      }))
+      return
+    }
+
+    setUploadState({
+      file,
+      uploading: true,
+      progress: 0,
+      error: null,
+      uploadedKey: null,
+      uploadedUrl: null
+    })
+
+    try {
+      // Get presigned URL
+      const presignResult = await presignApi.execute('/api/uploads/presign', {
+        method: 'POST',
+        body: {
+          filename: file.name,
+          contentType: file.type,
+          type: 'deliverable',
+          projectId
+        }
+      })
+
+      if (!presignResult) {
+        throw new Error(presignApi.error?.message || 'Failed to get upload URL')
+      }
+
+      setUploadState(prev => ({ ...prev, progress: 30 }))
+
+      // Upload file to R2
+      const uploadResponse = await fetch(presignResult.uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file')
+      }
+
+      setUploadState(prev => ({ ...prev, progress: 80 }))
+
+      // Confirm upload and get download URL
+      const confirmResult = await api.execute('/api/uploads/confirm', {
+        method: 'POST',
+        body: { key: presignResult.key }
+      }) as any
+
+      if (!confirmResult?.downloadUrl) {
+        throw new Error('Failed to confirm upload')
+      }
+
+      setUploadState({
+        file,
+        uploading: false,
+        progress: 100,
+        error: null,
+        uploadedKey: presignResult.key,
+        uploadedUrl: confirmResult.downloadUrl
+      })
+
+      // Update form with uploaded file URL
+      handleInputChange('deliverableUrl', confirmResult.downloadUrl)
+      handleInputChange('deliverableName', file.name)
+
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { component: 'CreateApprovalForm', action: 'fileUpload' }
+      })
+      setUploadState(prev => ({
+        ...prev,
+        uploading: false,
+        error: err instanceof Error ? err.message : 'Upload failed'
+      }))
+    }
+  }, [state.data.deliverableType, projectId, presignApi, api, handleInputChange])
+
+  // Remove uploaded file
+  const handleRemoveFile = useCallback(() => {
+    setUploadState({
+      file: null,
+      uploading: false,
+      progress: 0,
+      error: null,
+      uploadedKey: null,
+      uploadedUrl: null
+    })
+    handleInputChange('deliverableUrl', '')
+    handleInputChange('deliverableName', '')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [handleInputChange])
+
   // Validate and submit form
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
@@ -161,7 +326,11 @@ export default function CreateApprovalForm({
       }
 
       // Add deliverable info if provided
-      if (state.data.deliverableUrl) {
+      if (uploadState.uploadedUrl) {
+        submitData.deliverableUrl = uploadState.uploadedUrl
+        submitData.deliverableName = uploadState.file?.name || 'Deliverable'
+        submitData.deliverableType = state.data.deliverableType || 'pdf'
+      } else if (state.data.deliverableUrl) {
         const sanitizedUrl = sanitizeUrl(state.data.deliverableUrl)
         if (sanitizedUrl) {
           submitData.deliverableUrl = sanitizedUrl
@@ -185,7 +354,8 @@ export default function CreateApprovalForm({
         (window as any).gtag('event', 'approval_created', {
           project_id: projectId,
           stage: submitData.stage,
-          has_deliverable: !!submitData.deliverableUrl
+          has_deliverable: !!submitData.deliverableUrl,
+          deliverable_type: submitData.deliverableType
         })
       }
 
@@ -212,7 +382,7 @@ export default function CreateApprovalForm({
         submitError: err instanceof Error ? err.message : 'Failed to create approval. Please try again.'
       }))
     }
-  }, [state.data, api, projectId, onSuccess])
+  }, [state.data, uploadState, api, projectId, onSuccess])
 
   // Success state
   if (state.isSuccess && state.createdApproval) {
@@ -234,13 +404,8 @@ export default function CreateApprovalForm({
             <button
               onClick={() => {
                 navigator.clipboard.writeText(state.createdApproval!.approvalUrl)
-                if (typeof window !== 'undefined' && (window as any).gtag) {
-                  (window as any).gtag('event', 'approval_url_copied', {
-                    approval_id: state.createdApproval!.id
-                  })
-                }
               }}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="text-sm text-green-600 hover:text-green-700 font-medium"
             >
               Copy Link
             </button>
@@ -257,8 +422,8 @@ export default function CreateApprovalForm({
 
         <div className="mt-6 flex gap-3">
           <button
-            onClick={() => navigate(`/dashboard/projects/${projectId}`)}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
+            onClick={() => navigate('/dashboard/projects/' + projectId)}
+            className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
           >
             View Project
           </button>
@@ -279,6 +444,14 @@ export default function CreateApprovalForm({
                 submitError: null,
                 isSuccess: false,
                 createdApproval: null
+              })
+              setUploadState({
+                file: null,
+                uploading: false,
+                progress: 0,
+                error: null,
+                uploadedKey: null,
+                uploadedUrl: null
               })
               setShowCustomStage(false)
             }}
@@ -319,9 +492,9 @@ export default function CreateApprovalForm({
           id="stage"
           value={showCustomStage ? 'CUSTOM' : state.data.stage}
           onChange={(e) => handleStageChange(e.target.value)}
-          className={`w-full px-4 py-2 rounded-lg border ${
+          className={'w-full px-4 py-2 rounded-lg border ' + (
             state.errors.stage ? 'border-red-300 bg-red-50' : 'border-gray-300'
-          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+          ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
           aria-invalid={!!state.errors.stage}
           aria-describedby={state.errors.stage ? 'stage-error' : undefined}
           required
@@ -354,9 +527,9 @@ export default function CreateApprovalForm({
               onChange={(e) => handleInputChange('stage', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
               placeholder="e.g., CUSTOM_STAGE"
               maxLength={50}
-              className={`w-full px-4 py-2 rounded-lg border ${
+              className={'w-full px-4 py-2 rounded-lg border ' + (
                 state.errors.stage ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+              ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
               required
             />
             <p className="text-xs text-gray-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
@@ -373,9 +546,9 @@ export default function CreateApprovalForm({
               onChange={(e) => handleInputChange('stageLabel', e.target.value)}
               placeholder="e.g., Custom Design Review"
               maxLength={100}
-              className={`w-full px-4 py-2 rounded-lg border ${
+              className={'w-full px-4 py-2 rounded-lg border ' + (
                 state.errors.stageLabel ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+              ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
               required
             />
           </div>
@@ -394,16 +567,23 @@ export default function CreateApprovalForm({
               <button
                 key={type.value}
                 type="button"
-                onClick={() => handleInputChange('deliverableType', type.value)}
-                className={`p-3 rounded-lg border-2 transition ${
+                onClick={() => {
+                  handleInputChange('deliverableType', type.value)
+                  setUseFileUpload(type.value !== 'link')
+                  // Reset upload state when changing type
+                  if (type.value === 'link') {
+                    handleRemoveFile()
+                  }
+                }}
+                className={'p-3 rounded-lg border-2 transition ' + (
                   state.data.deliverableType === type.value
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 hover:border-gray-300'
-                }`}
+                )}
               >
-                <Icon className={`w-5 h-5 mx-auto mb-1 ${
-                  state.data.deliverableType === type.value ? 'text-blue-600' : 'text-gray-400'
-                }`} />
+                <Icon className={'w-5 h-5 mx-auto mb-1 ' + (
+                  state.data.deliverableType === type.value ? 'text-green-600' : 'text-gray-400'
+                )} />
                 <span className="text-xs font-medium text-gray-700">{type.label}</span>
               </button>
             )
@@ -411,45 +591,151 @@ export default function CreateApprovalForm({
         </div>
       </div>
 
-      {/* Deliverable URL */}
+      {/* File Upload or URL Input */}
       {state.data.deliverableType && (
         <>
-          <div>
-            <label htmlFor="deliverableUrl" className="block text-sm font-medium text-gray-700 mb-2">
-              Deliverable URL
-            </label>
-            <input
-              type="url"
-              id="deliverableUrl"
-              value={state.data.deliverableUrl}
-              onChange={(e) => handleInputChange('deliverableUrl', e.target.value)}
-              placeholder="https://example.com/document.pdf"
-              maxLength={500}
-              className={`w-full px-4 py-2 rounded-lg border ${
-                state.errors.deliverableUrl ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-            />
-            {state.errors.deliverableUrl && (
-              <p className="text-sm text-red-600 mt-1" role="alert">
-                {state.errors.deliverableUrl}
-              </p>
-            )}
-          </div>
+          {state.data.deliverableType !== 'link' && useFileUpload ? (
+            /* File Upload Section */
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload File
+              </label>
+              
+              {uploadState.uploadedKey ? (
+                /* Uploaded file preview */
+                <div className="border border-green-200 bg-green-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                        <File className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{uploadState.file?.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {uploadState.file && (uploadState.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      className="p-1 text-gray-400 hover:text-red-600 transition"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-xs font-medium">Uploaded successfully</span>
+                  </div>
+                </div>
+              ) : uploadState.uploading ? (
+                /* Upload progress */
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+                    <span className="text-sm text-gray-600">Uploading {uploadState.file?.name}...</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: uploadState.progress + '%' }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Upload dropzone */
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className={'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ' + (
+                    uploadState.error ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
+                  )}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={state.data.deliverableType === 'pdf' ? '.pdf' : '.jpg,.jpeg,.png,.webp'}
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">
+                    Click to upload or drag and drop
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {state.data.deliverableType === 'pdf' ? 'PDF up to 10MB' : 'JPG, PNG, WebP up to 10MB'}
+                  </p>
+                </div>
+              )}
+              
+              {uploadState.error && (
+                <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {uploadState.error}
+                </p>
+              )}
 
-          <div>
-            <label htmlFor="deliverableName" className="block text-sm font-medium text-gray-700 mb-2">
-              Deliverable Name
-            </label>
-            <input
-              type="text"
-              id="deliverableName"
-              value={state.data.deliverableName}
-              onChange={(e) => handleInputChange('deliverableName', e.target.value)}
-              placeholder="e.g., Initial Concept Drawings"
-              maxLength={100}
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+              {/* Option to use URL instead */}
+              <button
+                type="button"
+                onClick={() => setUseFileUpload(false)}
+                className="text-xs text-gray-500 hover:text-green-600 mt-2"
+              >
+                Or enter a URL instead
+              </button>
+            </div>
+          ) : (
+            /* URL Input */
+            <>
+              <div>
+                <label htmlFor="deliverableUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                  Deliverable URL
+                </label>
+                <input
+                  type="url"
+                  id="deliverableUrl"
+                  value={state.data.deliverableUrl}
+                  onChange={(e) => handleInputChange('deliverableUrl', e.target.value)}
+                  placeholder="https://example.com/document.pdf"
+                  maxLength={500}
+                  className={'w-full px-4 py-2 rounded-lg border ' + (
+                    state.errors.deliverableUrl ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
+                />
+                {state.errors.deliverableUrl && (
+                  <p className="text-sm text-red-600 mt-1" role="alert">
+                    {state.errors.deliverableUrl}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="deliverableName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Deliverable Name
+                </label>
+                <input
+                  type="text"
+                  id="deliverableName"
+                  value={state.data.deliverableName}
+                  onChange={(e) => handleInputChange('deliverableName', e.target.value)}
+                  placeholder="e.g., Initial Concept Drawings"
+                  maxLength={100}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Option to upload file instead */}
+              {state.data.deliverableType !== 'link' && (
+                <button
+                  type="button"
+                  onClick={() => setUseFileUpload(true)}
+                  className="text-xs text-gray-500 hover:text-green-600"
+                >
+                  Or upload a file instead
+                </button>
+              )}
+            </>
+          )}
         </>
       )}
 
@@ -466,9 +752,9 @@ export default function CreateApprovalForm({
           onChange={(e) => handleInputChange('expiryDays', parseInt(e.target.value) || 14)}
           min={1}
           max={90}
-          className={`w-full px-4 py-2 rounded-lg border ${
+          className={'w-full px-4 py-2 rounded-lg border ' + (
             state.errors.expiryDays ? 'border-red-300 bg-red-50' : 'border-gray-300'
-          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+          ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
         />
         <p className="text-xs text-gray-500 mt-1">Client will have {state.data.expiryDays} days to respond</p>
         {state.errors.expiryDays && (
@@ -484,7 +770,7 @@ export default function CreateApprovalForm({
           <button
             type="button"
             onClick={onCancel}
-            disabled={state.isSubmitting}
+            disabled={state.isSubmitting || uploadState.uploading}
             className="flex-1 px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
@@ -492,8 +778,8 @@ export default function CreateApprovalForm({
         )}
         <button
           type="submit"
-          disabled={state.isSubmitting}
-          className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          disabled={state.isSubmitting || uploadState.uploading}
+          className="flex-1 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {state.isSubmitting ? (
             <>
@@ -508,7 +794,6 @@ export default function CreateApprovalForm({
     </form>
   )
 }
-
 
 
 
