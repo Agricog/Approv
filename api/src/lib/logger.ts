@@ -4,6 +4,7 @@
  * SECURITY: Never log sensitive data
  */
 import pino from 'pino'
+import type { Prisma } from '@prisma/client'
 
 // =============================================================================
 // CONFIGURATION
@@ -211,7 +212,7 @@ export function logAudit(entry: AuditLogEntry): void {
 
   // Write to database (async, non-blocking, dynamic import to avoid circular dependency)
   if (entry.organizationId) {
-    import('./prisma.js').then(({ prisma, Prisma }) => {
+    import('./prisma.js').then(({ prisma }) => {
       prisma.auditLog.create({
         data: {
           action: entry.action,
@@ -223,9 +224,9 @@ export function logAudit(entry: AuditLogEntry): void {
           approvalId: entry.approvalId,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
-          metadata: entry.metadata as Prisma.InputJsonValue,
-          previousState: entry.previousState ? safeLog(entry.previousState) as Prisma.InputJsonValue : Prisma.JsonNull,
-          newState: entry.newState ? safeLog(entry.newState) as Prisma.InputJsonValue : Prisma.JsonNull
+          metadata: (entry.metadata || {}) as Prisma.InputJsonValue,
+          previousState: (entry.previousState ? safeLog(entry.previousState) : {}) as Prisma.InputJsonValue,
+          newState: (entry.newState ? safeLog(entry.newState) : {}) as Prisma.InputJsonValue
         }
       }).catch(err => {
         auditLogger.error({ err }, 'Failed to write audit log to database')
