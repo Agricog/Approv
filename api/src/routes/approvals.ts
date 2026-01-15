@@ -27,9 +27,43 @@ import {
   sendApprovalReminder,
   sendApprovalRequest
 } from '../services/email.js'
+import { getSignedDownloadUrl, isStorageConfigured } from '../services/storage.js'
 
 const router = Router()
 const logger = createLogger('approvals')
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Resolve deliverable URL - converts R2 keys to signed URLs
+ */
+async function resolveDeliverableUrl(deliverableUrl: string | null): Promise<string | null> {
+  if (!deliverableUrl) return null
+  
+  // Check if it's an R2 key (prefixed with "r2:")
+  if (deliverableUrl.startsWith('r2:')) {
+    const key = deliverableUrl.substring(3) // Remove "r2:" prefix
+    
+    if (!isStorageConfigured()) {
+      logger.warn({ key }, 'R2 storage not configured, cannot resolve deliverable URL')
+      return null
+    }
+    
+    try {
+      // Generate signed URL valid for 1 hour
+      const signedUrl = await getSignedDownloadUrl(key, 3600)
+      return signedUrl
+    } catch (err) {
+      logger.error({ err, key }, 'Failed to generate signed URL for deliverable')
+      return null
+    }
+  }
+  
+  // Return as-is if it's a regular URL
+  return deliverableUrl
+}
 
 // =============================================================================
 // AUTHENTICATED ROUTES (with CSRF protection)
@@ -94,14 +128,16 @@ router.post(
       metadata: {
         projectId,
         stage,
-        stageLabel
+        stageLabel,
+        hasDeliverable: !!deliverableUrl
       }
     })
 
     logger.info({
       approvalId: approval.id,
       projectId,
-      stage
+      stage,
+      hasDeliverable: !!deliverableUrl
     }, 'Approval created')
 
     // Send approval request email to client
@@ -193,7 +229,8 @@ router.get(
           expiresAt: a.expiresAt.toISOString(),
           respondedAt: a.respondedAt?.toISOString() || null,
           viewCount: a.viewCount,
-          reminderCount: a.reminderCount
+          reminderCount: a.reminderCount,
+          hasDeliverable: !!a.deliverableUrl
         })),
         total,
         page: parseInt(page as string),
@@ -354,9 +391,13 @@ router.get(
       }).catch(() => {}) // Non-blocking
     }
     
+    // Resolve deliverable URL (converts R2 keys to signed URLs)
+    const resolvedDeliverableUrl = await resolveDeliverableUrl(approval.deliverableUrl)
+    
     logger.info({
       approvalId: approval.id,
       status: effectiveStatus,
+      hasDeliverable: !!resolvedDeliverableUrl,
       ip: getClientIp(req)
     }, 'Approval viewed')
     
@@ -371,7 +412,7 @@ router.get(
         stage: approval.stage,
         stageLabel: approval.stageLabel,
         status: effectiveStatus,
-        deliverableUrl: approval.deliverableUrl,
+        deliverableUrl: resolvedDeliverableUrl,
         deliverableType: approval.deliverableType,
         deliverableName: approval.deliverableName,
         createdAt: approval.createdAt.toISOString(),
