@@ -3,7 +3,7 @@
  * Organization settings, branding, and integrations
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { 
   Link2, 
@@ -13,7 +13,9 @@ import {
   Palette,
   Image,
   Save,
-  Building2
+  Building2,
+  Upload,
+  X
 } from 'lucide-react'
 import { DashboardLayout, PageHeader, ContentCard } from '../../components/layout'
 import { Button } from '../../components/common'
@@ -81,6 +83,7 @@ function BrandingSettings() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -90,6 +93,11 @@ function BrandingSettings() {
     website: '',
     phone: '',
     address: ''
+  })
+
+  const [logoUpload, setLogoUpload] = useState({
+    uploading: false,
+    error: null as string | null
   })
 
   // Load current settings
@@ -116,6 +124,111 @@ function BrandingSettings() {
     setFormData(prev => ({ ...prev, [field]: value }))
     setSaveSuccess(false)
     setSaveError(null)
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
+    if (!allowedTypes.includes(file.type)) {
+      setLogoUpload({ uploading: false, error: 'Please upload a PNG, JPG, WebP, or SVG file' })
+      return
+    }
+
+    // Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoUpload({ uploading: false, error: 'File too large. Maximum size is 2MB.' })
+      return
+    }
+
+    setLogoUpload({ uploading: true, error: null })
+
+    try {
+      const token = await getToken()
+      const csrfToken = await getCsrfToken()
+
+      // Get presigned URL
+      const presignResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'}/api/uploads/presign`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-CSRF-Token': csrfToken
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type,
+            type: 'logo'
+          })
+        }
+      )
+
+      if (!presignResponse.ok) {
+        throw new Error('Failed to get upload URL')
+      }
+
+      const { key, uploadUrl } = await presignResponse.json()
+
+      // Upload to R2
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file')
+      }
+
+      // Confirm upload and get download URL
+      const confirmResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || 'https://airy-fascination-production-00ba.up.railway.app'}/api/uploads/confirm`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-CSRF-Token': csrfToken
+          },
+          body: JSON.stringify({ key })
+        }
+      )
+
+      if (!confirmResponse.ok) {
+        throw new Error('Failed to confirm upload')
+      }
+
+      const { downloadUrl } = await confirmResponse.json()
+
+      // Update form with new logo URL
+      setFormData(prev => ({ ...prev, logo: downloadUrl }))
+      setLogoUpload({ uploading: false, error: null })
+      setSaveSuccess(false)
+
+    } catch (err) {
+      setLogoUpload({ 
+        uploading: false, 
+        error: err instanceof Error ? err.message : 'Upload failed' 
+      })
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveLogo = () => {
+    setFormData(prev => ({ ...prev, logo: '' }))
+    setSaveSuccess(false)
   }
 
   const handleSave = async () => {
@@ -199,33 +312,86 @@ function BrandingSettings() {
         <p className="text-xs text-gray-500 mt-1">Appears in email headers and footers</p>
       </div>
 
-      {/* Logo URL */}
+      {/* Logo Upload */}
       <div>
-        <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           <Image className="w-4 h-4 inline mr-1" />
-          Logo URL
+          Logo
         </label>
-        <input
-          type="url"
-          id="logo"
-          value={formData.logo}
-          onChange={(e) => handleChange('logo', e.target.value)}
-          placeholder="https://example.com/logo.png"
-          className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-500 mt-1">Recommended: 200x50px PNG with transparent background</p>
         
-        {/* Logo Preview */}
-        {formData.logo && (
-          <div className="mt-2 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-2">Preview:</p>
-            <img 
-              src={formData.logo} 
-              alt="Logo preview" 
-              className="max-h-12 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none'
-              }}
+        {formData.logo ? (
+          /* Logo preview */
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <img 
+                  src={formData.logo} 
+                  alt="Logo preview" 
+                  className="max-h-12 object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"><text y="28" fill="%23999">Logo</text></svg>'
+                  }}
+                />
+                <span className="text-sm text-gray-600">Current logo</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveLogo}
+                className="p-1 text-gray-400 hover:text-red-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Upload dropzone */
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ${
+              logoUpload.error ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              onChange={handleLogoUpload}
+              className="hidden"
+            />
+            {logoUpload.uploading ? (
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-green-600" />
+                <span className="text-sm text-gray-600">Uploading...</span>
+              </div>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600">Click to upload logo</p>
+                <p className="text-xs text-gray-400 mt-1">PNG, JPG, WebP, or SVG up to 2MB</p>
+              </>
+            )}
+          </div>
+        )}
+        
+        {logoUpload.error && (
+          <p className="text-sm text-red-600 mt-2">{logoUpload.error}</p>
+        )}
+        
+        <p className="text-xs text-gray-500 mt-2">Recommended: 200x50px with transparent background</p>
+
+        {/* Or enter URL manually */}
+        {!formData.logo && (
+          <div className="mt-3">
+            <label htmlFor="logoUrl" className="block text-xs text-gray-500 mb-1">
+              Or enter URL manually:
+            </label>
+            <input
+              type="url"
+              id="logoUrl"
+              value={formData.logo}
+              onChange={(e) => handleChange('logo', e.target.value)}
+              placeholder="https://example.com/logo.png"
+              className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
           </div>
         )}
