@@ -100,7 +100,7 @@ router.get(
           id: p.id,
           name: p.name,
           reference: p.reference,
-          clientName: `${p.client.firstName} ${p.client.lastName}`,
+          clientName: p.client.firstName + ' ' + p.client.lastName,
           clientCompany: p.client.company,
           status: p.status,
           currentStage: p.currentStage,
@@ -169,6 +169,7 @@ router.get(
             createdAt: true,
             respondedAt: true,
             responseTimeHours: true,
+            responseNotes: true,
             viewCount: true,
             reminderCount: true
           }
@@ -198,14 +199,14 @@ router.get(
         updatedAt: project.updatedAt.toISOString(),
         client: {
           id: project.client.id,
-          name: `${project.client.firstName} ${project.client.lastName}`,
+          name: project.client.firstName + ' ' + project.client.lastName,
           email: project.client.email,
           company: project.client.company,
           phone: project.client.phone
         },
         members: project.members.map(m => ({
           id: m.user.id,
-          name: `${m.user.firstName} ${m.user.lastName}`,
+          name: m.user.firstName + ' ' + m.user.lastName,
           email: m.user.email,
           avatarUrl: m.user.avatarUrl,
           role: m.role
@@ -220,6 +221,7 @@ router.get(
           createdAt: a.createdAt.toISOString(),
           respondedAt: a.respondedAt?.toISOString() || null,
           responseTimeHours: a.responseTimeHours,
+          responseNotes: a.responseNotes,
           viewCount: a.viewCount || 0,
           reminderCount: a.reminderCount || 0
         })),
@@ -269,7 +271,6 @@ router.post(
       const newClient = await prisma.client.create({
         data: {
           organizationId: organizationId!,
-          createdBy: user!.id,
           firstName: client.firstName,
           lastName: client.lastName,
           email: client.email,
@@ -330,7 +331,7 @@ router.post(
         id: project.id,
         name: project.name,
         reference: project.reference,
-        clientName: `${project.client.firstName} ${project.client.lastName}`
+        clientName: project.client.firstName + ' ' + project.client.lastName
       }
     })
   })
@@ -489,7 +490,7 @@ router.post(
         stage: approval.stage,
         stageLabel: approval.stageLabel,
         expiresAt: approval.expiresAt.toISOString(),
-        approvalUrl: `${process.env.APP_URL || 'https://approv.co.uk'}/approve/${approval.token}`
+        approvalUrl: (process.env.APP_URL || 'https://approv.co.uk') + '/approve/' + approval.token
       }
     })
   })
@@ -507,13 +508,13 @@ async function generateProjectReference(organizationId: string): Promise<string>
     where: {
       organizationId,
       createdAt: {
-        gte: new Date(`${year}-01-01`),
-        lt: new Date(`${year + 1}-01-01`)
+        gte: new Date(year + '-01-01'),
+        lt: new Date((year + 1) + '-01-01')
       }
     }
   })
   
-  return `PRJ-${year}-${String(count + 1).padStart(3, '0')}`
+  return 'PRJ-' + year + '-' + String(count + 1).padStart(3, '0')
 }
 
 export { router as projectRoutes }
