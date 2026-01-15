@@ -70,8 +70,10 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
   useEffect(() => {
     clientsApi.execute('/api/clients')
       .then(result => {
-        // result is already unwrapped by useApi - it's the array directly
-        if (result && Array.isArray(result)) {
+        // Handle both formats: { items: [...] } or direct array
+        if (result && typeof result === 'object' && 'items' in result) {
+          setClients((result as { items: Client[] }).items)
+        } else if (Array.isArray(result)) {
           setClients(result)
         }
       })
