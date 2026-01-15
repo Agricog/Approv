@@ -44,8 +44,6 @@ router.get(
         email: true,
         phone: true,
         company: true,
-        address: true,
-        notes: true,
         createdAt: true,
         updatedAt: true
       }
@@ -230,8 +228,78 @@ router.put(
 )
 
 /**
+ * DELETE /api/clients/delete-all
+ * Delete all clients for the organization (must come before :id route)
+ */
+router.delete(
+  '/delete-all',
+  asyncHandler(async (req, res) => {
+    const { organizationId, user } = req
+
+    // Get count before deletion
+    const clientCount = await prisma.client.count({
+      where: { organizationId }
+    })
+
+    if (clientCount === 0) {
+      return res.json({
+        success: true,
+        deleted: 0,
+        message: 'No clients to delete'
+      })
+    }
+
+    // First delete all approvals for clients in this org
+    await prisma.approval.deleteMany({
+      where: {
+        client: {
+          organizationId
+        }
+      }
+    })
+
+    // Delete all projects for clients in this org
+    await prisma.project.deleteMany({
+      where: {
+        client: {
+          organizationId
+        }
+      }
+    })
+
+    // Delete all clients
+    const result = await prisma.client.deleteMany({
+      where: { organizationId }
+    })
+
+    // Log audit
+    logAudit({
+      action: 'clients.deleted_all',
+      entityType: 'client',
+      entityId: 'all',
+      organizationId: organizationId!,
+      userId: user!.id,
+      ipAddress: getClientIp(req),
+      metadata: { deletedCount: result.count }
+    })
+
+    logger.info({
+      deletedCount: result.count,
+      userId: user!.id,
+      organizationId
+    }, 'All clients deleted')
+
+    res.json({
+      success: true,
+      deleted: result.count,
+      message: result.count + ' client(s) deleted successfully'
+    })
+  })
+)
+
+/**
  * DELETE /api/clients/:id
- * Delete client (only if no projects exist)
+ * Delete single client (only if no projects exist)
  */
 router.delete(
   '/:id',
@@ -258,7 +326,7 @@ router.delete(
 
     if (projectCount > 0) {
       throw new ValidationError(
-        `Cannot delete client with ${projectCount} project(s). Archive projects first.`
+        'Cannot delete client with ' + projectCount + ' project(s). Archive projects first.'
       )
     }
 
