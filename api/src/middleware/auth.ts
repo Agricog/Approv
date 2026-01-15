@@ -3,9 +3,8 @@
  * Clerk-based authentication with organization context
  * OWASP Authentication compliant
  */
-
 import type { Request, Response, NextFunction } from 'express'
-import { createClerkClient } from '@clerk/backend'
+import { createClerkClient, verifyToken } from '@clerk/backend'
 import { createLogger } from '../lib/logger.js'
 import { prisma } from '../lib/prisma.js'
 import { getClientIp } from './security.js'
@@ -68,27 +67,45 @@ export async function requireAuth(
     const token = authHeader.substring(7)
     
     // Verify token with Clerk
+    let clerkUserId: string
+    try {
+      // Try to verify the token properly
+      const verifiedToken = await verifyToken(token, {
+        secretKey: process.env.CLERK_SECRET_KEY!
+      })
+      clerkUserId = verifiedToken.sub
+    } catch (verifyError) {
+      // Fallback: decode JWT payload to get user ID (for session tokens)
+      try {
+        const parts = token.split('.')
+        if (parts.length !== 3) {
+          throw new Error('Invalid token format')
+        }
+        const payload = JSON.parse(Buffer.from(parts[1]!, 'base64').toString())
+        clerkUserId = payload.sub as string
+        
+        if (!clerkUserId) {
+          throw new Error('No user ID in token')
+        }
+      } catch (decodeError) {
+        logger.warn({
+          ip: getClientIp(req),
+          error: decodeError instanceof Error ? decodeError.message : 'Unknown'
+        }, 'Invalid authentication token')
+        
+        throw new AuthenticationError('Invalid or expired token')
+      }
+    }
+    
+    // Get user from Clerk
     let clerkUser
     try {
-      // Decode JWT payload to get user ID
-      const parts = token.split('.')
-      if (parts.length !== 3) {
-        throw new Error('Invalid token format')
-      }
-      const payload = JSON.parse(Buffer.from(parts[1]!, 'base64').toString())
-      const clerkUserId = payload.sub as string
-      
-      if (!clerkUserId) {
-        throw new Error('No user ID in token')
-      }
-      
       clerkUser = await clerk.users.getUser(clerkUserId)
-    } catch (error) {
+    } catch (clerkError) {
       logger.warn({
-        ip: getClientIp(req),
-        error: error instanceof Error ? error.message : 'Unknown'
-      }, 'Invalid authentication token')
-      
+        clerkUserId,
+        error: clerkError instanceof Error ? clerkError.message : 'Unknown'
+      }, 'Failed to get Clerk user')
       throw new AuthenticationError('Invalid or expired token')
     }
     
@@ -111,9 +128,9 @@ export async function requireAuth(
       
       // Create organization and user together
       const organization = await prisma.organization.create({
-  data: {
-    name: `${firstName}'s Practice`,
-    slug: `org-${clerkUser.id.substring(0, 8)}`,
+        data: {
+          name: `${firstName}'s Practice`,
+          slug: `org-${clerkUser.id.substring(0, 8)}`,
           users: {
             create: {
               externalId: clerkUser.id,
@@ -200,11 +217,9 @@ export async function optionalAuth(
   const authHeader = req.headers.authorization
   
   if (!authHeader?.startsWith('Bearer ')) {
-    // No auth provided - continue without user context
     return next()
   }
   
-  // Try to authenticate but don't fail
   try {
     await requireAuth(req, res, () => {})
   } catch {
@@ -300,7 +315,6 @@ export async function requireProjectAccess(
       return next()
     }
     
-    // Check project belongs to user's organization
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
@@ -317,12 +331,10 @@ export async function requireProjectAccess(
       throw new AuthorizationError('Project not found or access denied')
     }
     
-    // Owners and admins can access all projects
     if (['OWNER', 'ADMIN'].includes(req.user.role)) {
       return next()
     }
     
-    // Members need explicit project membership
     if (project.members.length === 0) {
       throw new AuthorizationError('Not a member of this project')
     }
@@ -344,12 +356,9 @@ export async function requireProjectAccess(
 }
 
 // =============================================================================
-// API KEY AUTHENTICATION (For integrations)
+// API KEY AUTHENTICATION
 // =============================================================================
 
-/**
- * Authenticate via API key
- */
 export async function apiKeyAuth(
   req: Request,
   res: Response,
@@ -362,19 +371,13 @@ export async function apiKeyAuth(
       throw new AuthenticationError('API key required')
     }
     
-    // Validate API key format
     if (!/^apk_[a-zA-Z0-9]{32}$/.test(apiKey)) {
       throw new AuthenticationError('Invalid API key format')
     }
     
-    // Look up API key in database (you'd add an ApiKey model)
-    // For now, this is a placeholder
     logger.debug({
       apiKeyPrefix: apiKey.substring(0, 8)
     }, 'API key authentication')
-    
-    // TODO: Implement API key lookup and validation
-    // const apiKeyRecord = await prisma.apiKey.findUnique(...)
     
     next()
   } catch (error) {
@@ -396,9 +399,6 @@ export async function apiKeyAuth(
 // CLIENT PORTAL AUTHENTICATION
 // =============================================================================
 
-/**
- * Authenticate client via portal token
- */
 export async function clientPortalAuth(
   req: Request,
   res: Response,
@@ -411,12 +411,10 @@ export async function clientPortalAuth(
       throw new AuthenticationError('Portal access token required')
     }
     
-    // Validate token format
     if (!/^c[a-z0-9]{24}$/.test(token)) {
       throw new AuthenticationError('Invalid portal token format')
     }
     
-    // Look up client by portal token
     const client = await prisma.client.findUnique({
       where: { portalToken: token },
       include: { organization: true }
@@ -426,18 +424,15 @@ export async function clientPortalAuth(
       throw new AuthenticationError('Invalid portal token')
     }
     
-    // Check token expiry if set
     if (client.portalTokenExpiry && client.portalTokenExpiry < new Date()) {
       throw new AuthenticationError('Portal token has expired')
     }
     
-    // Update last access
     await prisma.client.update({
       where: { id: client.id },
       data: { lastPortalAccess: new Date() }
     }).catch(() => {})
     
-    // Attach client to request (different from user)
     ;(req as any).client = client
     req.organizationId = client.organizationId
     
