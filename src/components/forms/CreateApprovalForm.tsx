@@ -257,7 +257,7 @@ export default function CreateApprovalForm({
 
         <div className="mt-6 flex gap-3">
           <button
-            onClick={() => navigate(`/projects/${projectId}`)}
+            onClick={() => navigate(`/dashboard/projects/${projectId}`)}
             className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
           >
             View Project
@@ -508,7 +508,6 @@ export default function CreateApprovalForm({
     </form>
   )
 }
-
 
 
 
