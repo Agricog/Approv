@@ -127,7 +127,7 @@ router.put(
     logAudit({
       action: 'organization.updated',
       entityType: 'organization',
-      entityId: organizationId,
+      entityId: organizationId!,
       organizationId,
       userId: user!.id,
       previousState: {
