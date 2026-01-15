@@ -28,6 +28,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 
 // Approval components
 import { ApprovalPage } from './components/approval'
+import { Approvals } from './pages/dashboard/Approvals'
 
 // Layouts
 import { DashboardLayout } from './components/layout'
@@ -229,7 +230,7 @@ export default function App() {
               <Route path="/dashboard/clients/new" element={<ProtectedRoute><DashboardLayout><CreateClientPage /></DashboardLayout></ProtectedRoute>} />
               
               {/* Dashboard - Other */}
-              <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
+              <Route path="/dashboard/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
               <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
               <Route path="/dashboard/activity" element={<ProtectedRoute><DashboardLayout><ActivityPage /></DashboardLayout></ProtectedRoute>} />
