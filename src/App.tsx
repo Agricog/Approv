@@ -111,17 +111,6 @@ function TeamPage() {
   )
 }
 
-function ApprovalsPage() {
-  return (
-    <DashboardLayout>
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Approvals</h1>
-        <p className="text-gray-600">Approvals management coming soon.</p>
-      </div>
-    </DashboardLayout>
-  )
-}
-
 function NotFoundPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
