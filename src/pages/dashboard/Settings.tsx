@@ -172,7 +172,8 @@ function BrandingSettings() {
         throw new Error('Failed to get upload URL')
       }
 
-      const { key, uploadUrl } = await presignResponse.json()
+      const presignData = await presignResponse.json()
+      const { key, uploadUrl } = presignData.data || presignData
 
       // Upload to R2
       const uploadResponse = await fetch(uploadUrl, {
@@ -206,7 +207,8 @@ function BrandingSettings() {
         throw new Error('Failed to confirm upload')
       }
 
-      const { downloadUrl } = await confirmResponse.json()
+      const confirmData = await confirmResponse.json()
+      const { downloadUrl } = confirmData.data || confirmData
 
       // Update form with new logo URL
       setFormData(prev => ({ ...prev, logo: downloadUrl }))
