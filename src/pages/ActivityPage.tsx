@@ -38,10 +38,13 @@ interface ActivityLog {
 }
 
 interface ActivityResponse {
-  items: ActivityLog[]
-  total: number
-  page: number
-  totalPages: number
+  success: boolean
+  data: {
+    items: ActivityLog[]
+    total: number
+    page: number
+    totalPages: number
+  }
 }
 
 export default function ActivityPage() {
