@@ -14,7 +14,6 @@ import {
   Plus,
   Loader2,
   AlertCircle,
-  Edit,
   Trash2
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
