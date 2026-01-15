@@ -218,14 +218,14 @@ export function logAudit(entry: AuditLogEntry): void {
         entityType: entry.entityType,
         entityId: entry.entityId,
         organizationId: entry.organizationId,
-        userId: entry.userId || null,
-        projectId: entry.projectId || null,
-        approvalId: entry.approvalId || null,
-        ipAddress: entry.ipAddress || null,
-        userAgent: entry.userAgent || null,
-        metadata: entry.metadata || null,
-        previousState: entry.previousState ? safeLog(entry.previousState) : null,
-        newState: entry.newState ? safeLog(entry.newState) : null
+        userId: entry.userId,
+        projectId: entry.projectId,
+        approvalId: entry.approvalId,
+        ipAddress: entry.ipAddress,
+        userAgent: entry.userAgent,
+        metadata: entry.metadata || undefined,
+        previousState: entry.previousState ? safeLog(entry.previousState) : undefined,
+        newState: entry.newState ? safeLog(entry.newState) : undefined
       }
     }).catch(err => {
       auditLogger.error({ err, entry }, 'Failed to write audit log to database')
