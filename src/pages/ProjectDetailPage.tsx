@@ -1,7 +1,6 @@
 /**
  * ProjectDetailPage Component
  * Shows project details and associated approvals
- * AUTAIMATE BUILD STANDARD v2
  */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -23,10 +22,6 @@ import {
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
-
-// =============================================================================
-// TYPES
-// =============================================================================
 
 interface Client {
   id: string
@@ -63,19 +58,10 @@ interface Project {
   updatedAt: string
 }
 
-interface ApiResponse {
-  success: boolean
-  data: Project
-}
-
-// =============================================================================
-// COMPONENT
-// =============================================================================
-
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const api = useApi<ApiResponse>()
+  const api = useApi<Project>()
   
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -96,10 +82,11 @@ export default function ProjectDetailPage() {
     setError(null)
 
     try {
-      const result = await api.execute(`/api/projects/${projectId}`)
+      const result = await api.execute('/api/projects/' + projectId)
       
-      if (result?.data) {
-        setProject(result.data)
+      // useApi already unwraps the response, so result IS the project
+      if (result) {
+        setProject(result)
       } else {
         setError('Project not found')
       }
@@ -113,7 +100,6 @@ export default function ProjectDetailPage() {
     }
   }
 
-  // Format date
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Not set'
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -123,7 +109,6 @@ export default function ProjectDetailPage() {
     })
   }
 
-  // Format datetime
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -134,7 +119,6 @@ export default function ProjectDetailPage() {
     })
   }
 
-  // Get status badge
   const getStatusBadge = (status: string) => {
     const config: Record<string, { bg: string; text: string; icon: typeof CheckCircle2 }> = {
       ACTIVE: { bg: 'bg-green-100', text: 'text-green-800', icon: CheckCircle2 },
@@ -145,7 +129,6 @@ export default function ProjectDetailPage() {
     return config[status] || config.ACTIVE
   }
 
-  // Get approval status badge
   const getApprovalStatusBadge = (status: string) => {
     const config: Record<string, { bg: string; text: string; label: string }> = {
       PENDING: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Awaiting Response' },
@@ -156,7 +139,14 @@ export default function ProjectDetailPage() {
     return config[status] || config.PENDING
   }
 
-  // Loading state
+  const goToCreateApproval = () => {
+    navigate('/dashboard/projects/' + projectId + '/approvals/new')
+  }
+
+  const goBackToProjects = () => {
+    navigate('/dashboard/projects')
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -168,7 +158,6 @@ export default function ProjectDetailPage() {
     )
   }
 
-  // Error state
   if (error || !project) {
     return (
       <>
@@ -183,7 +172,7 @@ export default function ProjectDetailPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Project Not Found</h2>
             <p className="text-gray-600 mb-6">{error || 'Unable to load project'}</p>
             <button
-              onClick={() => navigate('/dashboard/projects')}
+              onClick={goBackToProjects}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
             >
               Back to Projects
@@ -201,16 +190,15 @@ export default function ProjectDetailPage() {
     <>
       <Helmet>
         <title>{project.name} | Approv</title>
-        <meta name="description" content={`Project details for ${project.name}`} />
+        <meta name="description" content={'Project details for ' + project.name} />
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
             <button
-              onClick={() => navigate('/dashboard/projects')}
+              onClick={goBackToProjects}
               className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition mb-4"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -221,7 +209,7 @@ export default function ProjectDetailPage() {
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadge.bg} ${statusBadge.text}`}>
+                  <span className={'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ' + statusBadge.bg + ' ' + statusBadge.text}>
                     <StatusIcon className="w-3 h-3" />
                     {project.status}
                   </span>
@@ -233,7 +221,7 @@ export default function ProjectDetailPage() {
               </div>
 
               <button
-                onClick={() => navigate(`/dashboard/projects/${projectId}/approvals/new`)}
+                onClick={goToCreateApproval}
                 className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
               >
                 <Plus className="w-4 h-4" />
@@ -243,12 +231,9 @@ export default function ProjectDetailPage() {
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - Project Details */}
             <div className="lg:col-span-1 space-y-6">
-              {/* Client Card */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <User className="w-5 h-5 text-gray-400" />
@@ -268,7 +253,6 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* Project Info Card */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-gray-400" />
@@ -293,7 +277,6 @@ export default function ProjectDetailPage() {
               </div>
             </div>
 
-            {/* Right Column - Approvals */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -309,7 +292,7 @@ export default function ProjectDetailPage() {
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No approvals yet</h3>
                     <p className="text-gray-500 mb-6">Create your first approval request for this project</p>
                     <button
-                      onClick={() => navigate(`/dashboard/projects/${projectId}/approvals/new`)}
+                      onClick={goToCreateApproval}
                       className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
                     >
                       <Plus className="w-4 h-4" />
@@ -328,7 +311,7 @@ export default function ProjectDetailPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
                                 <h3 className="font-medium text-gray-900">{approval.stageLabel}</h3>
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${approvalStatusBadge.bg} ${approvalStatusBadge.text}`}>
+                                <span className={'px-2 py-0.5 rounded-full text-xs font-medium ' + approvalStatusBadge.bg + ' ' + approvalStatusBadge.text}>
                                   {approvalStatusBadge.label}
                                 </span>
                               </div>
@@ -358,8 +341,8 @@ export default function ProjectDetailPage() {
 
                             <div className="flex items-center gap-2">
                               {isPending && approval.token && (
-                                <a
-                                  href={`https://approv.co.uk/approve/${approval.token}`}
+                                
+                                  href={'https://approv.co.uk/approve/' + approval.token}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
