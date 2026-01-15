@@ -62,10 +62,10 @@ export default function ActivityPage() {
     try {
       const params = filter !== 'all' ? '?entityType=' + filter : ''
       const result = await api.execute('/api/activity' + params)
-      if (result?.items) {
-        setActivities(result.items)
-        setTotal(result.total)
-      }
+if (result?.data?.items) {
+  setActivities(result.data.items)
+  setTotal(result.data.total)
+}
     } catch (err) {
       console.error('Failed to load activity:', err)
     } finally {
