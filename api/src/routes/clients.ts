@@ -241,8 +241,14 @@ router.delete(
       where: { organizationId }
     })
 
-    if (clientCount === 0) {
-      return res.json({
+    iif (clientCount === 0) {
+      res.json({
+        success: true,
+        deleted: 0,
+        message: 'No clients to delete'
+      })
+      return
+    }
         success: true,
         deleted: 0,
         message: 'No clients to delete'
