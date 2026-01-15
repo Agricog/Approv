@@ -25,6 +25,10 @@ model Organization {
   dropboxRefreshToken  String?
   dropboxTokenExpiry   DateTime?
   dropboxOAuthState    String?
+  emailFooterText String?  @map("email_footer_text")
+  website         String?
+  phone           String?
+  address         String?
   defaultExpiryDays Int      @default(14)
   reminderDays      Int[]    @default([3, 7, 10])
   createdAt         DateTime @default(now())
