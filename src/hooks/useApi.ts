@@ -50,7 +50,7 @@ interface UseApiReturn<T> {
 // CONSTANTS
 // =============================================================================
 
-const DEFAULT_TIMEOUT = 30000 // 30 seconds
+const DEFAULT_TIMEOUT = 30000
 const RETRY_STATUS_CODES = [408, 429, 503, 504]
 const METHODS_REQUIRING_CSRF = ['POST', 'PUT', 'DELETE', 'PATCH']
 
@@ -62,7 +62,6 @@ let cachedCsrfToken: string | null = null
 let csrfTokenExpiry: number = 0
 
 async function getCsrfToken(authToken: string | null): Promise<string | null> {
-  // Return cached token if still valid (with 1 minute buffer)
   if (cachedCsrfToken && Date.now() < csrfTokenExpiry - 60000) {
     return cachedCsrfToken
   }
@@ -88,13 +87,10 @@ async function getCsrfToken(authToken: string | null): Promise<string | null> {
     }
 
     const data = await response.json()
-    
-    // Handle both formats: { token: "..." } or { success: true, data: { token: "..." } }
     const token = data.token || data.data?.token
     
     if (token) {
       cachedCsrfToken = token
-      // Token expires in 1 hour, cache for 55 minutes
       csrfTokenExpiry = Date.now() + 55 * 60 * 1000
       return cachedCsrfToken
     }
@@ -143,7 +139,8 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
     } = options
 
     // Build full URL
-    const url = API_BASE_URL + (endpoint.startsWith('/') ? endpoint : '/' + endpoint)
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint
+    const url = API_BASE_URL + normalizedEndpoint
 
     // Create abort controller for timeout
     const controller = new AbortController()
@@ -202,9 +199,8 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
         return null
       }
 
-      // Handle CSRF token expired/invalid - retry once with fresh token
+      // Handle CSRF token expired/invalid
       if (response.status === 403 && METHODS_REQUIRING_CSRF.includes(method)) {
-        // Clear cached token and retry once
         cachedCsrfToken = null
         csrfTokenExpiry = 0
       }
@@ -225,7 +221,6 @@ export function useApi<T = unknown>(): UseApiReturn<T> {
           status: response.status
         }
 
-        // Log error to Sentry (non-4xx errors)
         if (response.status >= 500) {
           captureApiError(new Error(error.message), endpoint, method, response.status)
         }
@@ -320,16 +315,10 @@ function getDefaultErrorMessage(status: number): string {
   }
 }
 
-/**
- * Check if error is retryable
- */
 export function isRetryableError(error: ApiError): boolean {
   return error.status !== undefined && RETRY_STATUS_CODES.includes(error.status)
 }
 
-/**
- * Simple GET request helper
- */
 export function useApiGet<T = unknown>() {
   const api = useApi<T>()
   
@@ -340,9 +329,6 @@ export function useApiGet<T = unknown>() {
   return { ...api, get }
 }
 
-/**
- * Simple POST request helper
- */
 export function useApiPost<T = unknown>() {
   const api = useApi<T>()
   
@@ -353,9 +339,6 @@ export function useApiPost<T = unknown>() {
   return { ...api, post }
 }
 
-/**
- * Clear CSRF token cache (useful on logout)
- */
 export function clearCsrfCache() {
   cachedCsrfToken = null
   csrfTokenExpiry = 0
