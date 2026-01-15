@@ -3,7 +3,6 @@
  * Page wrapper for Create Approval form with SEO
  * AUTAIMATE BUILD STANDARD v2
  */
-
 import { useParams, useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { ArrowLeft } from 'lucide-react'
@@ -68,7 +67,7 @@ export default function CreateApprovalPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Project Not Found</h2>
             <p className="text-gray-600 mb-6">{error || 'Unable to load project'}</p>
             <button
-              onClick={() => navigate('/projects')}
+              onClick={() => navigate('/dashboard/projects')}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
             >
               Back to Projects
@@ -92,7 +91,7 @@ export default function CreateApprovalPage() {
         <header className="bg-white border-b border-gray-200">
           <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
             <button
-              onClick={() => navigate(`/projects/${projectId}`)}
+              onClick={() => navigate(`/dashboard/projects/${projectId}`)}
               className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition mb-2"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -110,10 +109,10 @@ export default function CreateApprovalPage() {
             onSuccess={() => {
               // Redirect to project page after success
               setTimeout(() => {
-                navigate(`/projects/${projectId}`)
+                navigate(`/dashboard/projects/${projectId}`)
               }, 3000)
             }}
-            onCancel={() => navigate(`/projects/${projectId}`)}
+            onCancel={() => navigate(`/dashboard/projects/${projectId}`)}
           />
         </main>
       </div>
