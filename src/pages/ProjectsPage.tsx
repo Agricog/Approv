@@ -3,7 +3,6 @@
  * Lists all projects for the organization
  * AUTAIMATE BUILD STANDARD v2
  */
-
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
@@ -45,12 +44,10 @@ export default function ProjectsPage() {
   const loadProjects = async () => {
     setLoading(true)
     setError(null)
-
     try {
       const result = await api.execute('/api/projects', {
         method: 'GET'
       })
-
       if (result?.items) {
         setProjects(result.items)
       } else if (Array.isArray(result)) {
@@ -127,7 +124,7 @@ export default function ProjectsPage() {
                 </p>
               </div>
               <button
-                onClick={() => navigate('/projects/new')}
+                onClick={() => navigate('/dashboard/projects/new')}
                 className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
               >
                 <Plus className="w-4 h-4" />
@@ -206,7 +203,7 @@ export default function ProjectsPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No projects yet</h3>
               <p className="text-gray-600 mb-6">Create your first project to start tracking approvals</p>
               <button
-                onClick={() => navigate('/projects/new')}
+                onClick={() => navigate('/dashboard/projects/new')}
                 className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition font-medium"
               >
                 <Plus className="w-5 h-5" />
@@ -230,7 +227,7 @@ export default function ProjectsPage() {
               {filteredProjects.map((project) => (
                 <div
                   key={project.id}
-                  onClick={() => navigate(`/projects/${project.id}`)}
+                  onClick={() => navigate(`/dashboard/projects/${project.id}`)}
                   className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition cursor-pointer"
                 >
                   {/* Status Badge */}
@@ -276,7 +273,7 @@ export default function ProjectsPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(`/projects/${project.id}/approvals/new`)
+                        navigate(`/dashboard/projects/${project.id}/approvals/new`)
                       }}
                       className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                     >
