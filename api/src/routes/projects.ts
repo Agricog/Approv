@@ -2,7 +2,6 @@
  * Project Routes
  * Project management endpoints (authenticated)
  */
-
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { createLogger, logAudit } from '../lib/logger.js'
@@ -162,12 +161,16 @@ router.get(
           orderBy: { createdAt: 'desc' },
           select: {
             id: true,
+            token: true,
             stage: true,
             stageLabel: true,
             status: true,
+            expiresAt: true,
             createdAt: true,
             respondedAt: true,
-            responseTimeHours: true
+            responseTimeHours: true,
+            viewCount: true,
+            reminderCount: true
           }
         }
       }
@@ -209,12 +212,16 @@ router.get(
         })),
         approvals: project.approvals.map(a => ({
           id: a.id,
+          token: a.token,
           stage: a.stage,
           stageLabel: a.stageLabel,
           status: a.status,
+          expiresAt: a.expiresAt?.toISOString() || null,
           createdAt: a.createdAt.toISOString(),
           respondedAt: a.respondedAt?.toISOString() || null,
-          responseTimeHours: a.responseTimeHours
+          responseTimeHours: a.responseTimeHours,
+          viewCount: a.viewCount || 0,
+          reminderCount: a.reminderCount || 0
         })),
         stats: {
           totalApprovals: project.approvals.length,
