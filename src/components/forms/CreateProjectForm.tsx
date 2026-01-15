@@ -141,6 +141,14 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
     setState(prev => ({ ...prev, isSubmitting: true, submitError: null }))
 
     try {
+      // Convert dates to ISO format if present
+      const formatDate = (dateStr: string | undefined): string | undefined => {
+        if (!dateStr) return undefined
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) return undefined
+        return date.toISOString()
+      }
+
       // Prepare sanitized data
       const submitData: CreateProjectFormData = {
         name: validation.sanitized.name,
@@ -148,8 +156,8 @@ export default function CreateProjectForm({ onSuccess, onCancel }: CreateProject
         clientId: validation.sanitized.clientId,
         description: validation.sanitized.description || undefined,
         budget: state.data.budget,
-        startDate: state.data.startDate || undefined,
-        targetCompletionDate: state.data.targetCompletionDate || undefined
+        startDate: formatDate(state.data.startDate),
+        targetCompletionDate: formatDate(state.data.targetCompletionDate)
       }
 
       // Submit to API
