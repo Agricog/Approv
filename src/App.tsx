@@ -109,17 +109,6 @@ function TeamPage() {
   )
 }
 
-function ActivityPage() {
-  return (
-    <DashboardLayout>
-      <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Activity</h1>
-        <p className="text-gray-600">Activity log coming soon.</p>
-      </div>
-    </DashboardLayout>
-  )
-}
-
 function ApprovalsPage() {
   return (
     <DashboardLayout>
@@ -198,7 +187,6 @@ function HomePage() {
 export default function App() {
   return (
     <BrowserRouter>
-      {/* Skip navigation link for accessibility */}
       <a href="#main-content" className="skip-nav">
         Skip to main content
       </a>
@@ -235,18 +223,17 @@ export default function App() {
               <Route path="/dashboard/projects/:projectId/approvals/new" element={<ProtectedRoute><CreateApprovalPage /></ProtectedRoute>} />
               
               {/* Dashboard - Clients */}
-              <Route path="/dashboard/clients" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
-              <Route path="/dashboard/clients/new" element={<ProtectedRoute><CreateClientPage /></ProtectedRoute>} />
+              <Route path="/dashboard/clients" element={<ProtectedRoute><DashboardLayout><ClientsPage /></DashboardLayout></ProtectedRoute>} />
+              <Route path="/dashboard/clients/new" element={<ProtectedRoute><DashboardLayout><CreateClientPage /></DashboardLayout></ProtectedRoute>} />
               
               {/* Dashboard - Other */}
               <Route path="/dashboard/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
               <Route path="/dashboard/analytics" element={<ProtectedRoute><AnalyticsDashboard /></ProtectedRoute>} />
               <Route path="/dashboard/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
-              <Route path="/dashboard/activity" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
-              <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
+              <Route path="/dashboard/activity" element={<ProtectedRoute><DashboardLayout><ActivityPage /></DashboardLayout></ProtectedRoute>} />
+              <Route path="/dashboard/notifications" element={<ProtectedRoute><DashboardLayout><ActivityPage /></DashboardLayout></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/settings/dropbox/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/dashboard/activity" element={<ActivityPage />} />
               <Route path="/dashboard/settings/monday/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
               {/* Redirects */}
