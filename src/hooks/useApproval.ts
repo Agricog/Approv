@@ -213,6 +213,7 @@ export function useApproval(token?: string): UseApprovalReturn {
         
         fetchCsrfToken().catch(() => {})
       }
+
     } catch (err) {
       captureApprovalError(err, 'fetchApproval', undefined)
       
@@ -308,6 +309,7 @@ export function useApproval(token?: string): UseApprovalReturn {
       }))
 
       return true
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit approval'
       captureApprovalError(err, 'submitApproval', state.approval.id)
