@@ -11,8 +11,7 @@ import * as Sentry from '@sentry/react'
 import { 
   PortalHome, 
   ProjectDetail,
-  DashboardHome, 
-  ProjectList, 
+  DashboardHome,  
   AnalyticsDashboard,
   Settings
 } from './pages'
