@@ -26,7 +26,6 @@ const logger = createLogger('organizations')
  */
 router.get(
   '/current',
-  csrfProtection,
   requireAuth,
   asyncHandler(async (req, res) => {
     const { organizationId } = req
