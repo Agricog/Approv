@@ -44,10 +44,12 @@ export default function ProjectsPage() {
   const loadProjects = async () => {
     setLoading(true)
     setError(null)
+
     try {
       const result = await api.execute('/api/projects', {
         method: 'GET'
       })
+
       if (result?.items) {
         setProjects(result.items)
       } else if (Array.isArray(result)) {
@@ -189,7 +191,7 @@ export default function ProjectsPage() {
               </div>
               <button
                 onClick={loadProjects}
-                className="mt-4 bg-red-100 text-red-900 px-4 py-2 rounded-lg hover:bg-red-200 transition font-medium text-sm"
+                className="mt-4 flex items-center gap-2 bg-red-100 text-red-900 px-4 py-2 rounded-lg hover:bg-red-200 transition font-medium text-sm"
               >
                 Try Again
               </button>
