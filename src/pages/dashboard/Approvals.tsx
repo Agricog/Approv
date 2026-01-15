@@ -11,9 +11,7 @@ import {
   Clock,
   AlertCircle,
   Search,
-  Send,
   Eye,
-  ExternalLink,
   Bell,
   Loader2,
   ChevronDown,
@@ -31,41 +29,32 @@ import { useApi } from '../../hooks'
 
 interface Approval {
   id: string
-  title: string
-  description: string | null
+  projectId: string
+  projectName: string
+  projectReference: string
+  clientName: string
+  clientCompany: string | null
+  stage: string
+  stageLabel: string
   status: 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'EXPIRED'
-  token: string
-  sentAt: string | null
-  viewedAt: string | null
-  respondedAt: string | null
-  expiresAt: string | null
-  clientFeedback: string | null
-  reminderCount: number
-  lastReminderAt: string | null
-  project: {
-    id: string
-    name: string
-    client: {
-      id: string
-      name: string
-      email: string
-    }
-  }
-  deliverables: Array<{
-    id: string
-    title: string
-    type: string
-  }>
   createdAt: string
+  expiresAt: string | null
+  respondedAt: string | null
+  viewCount: number
+  reminderCount: number
+  hasDeliverable: boolean
 }
 
 interface ApprovalsResponse {
   items: Approval[]
   total: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
 
 type StatusFilter = 'all' | 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'EXPIRED'
-type SortField = 'createdAt' | 'sentAt' | 'status' | 'project'
+type SortField = 'createdAt' | 'status' | 'projectName'
 type SortOrder = 'asc' | 'desc'
 
 // =============================================================================
@@ -85,7 +74,14 @@ export function Approvals() {
     execute('/api/approvals')
   }, [execute])
 
-  const approvals = data?.items || []
+  // Handle wrapped response
+  const approvals = useMemo(() => {
+    if (!data) return []
+    // Handle both {items: [...]} and direct array
+    if (Array.isArray(data)) return data
+    if (data.items) return data.items
+    return []
+  }, [data])
 
   // Filter and sort approvals
   const filteredApprovals = useMemo(() => {
@@ -95,10 +91,11 @@ export function Approvals() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(a =>
-        a.title.toLowerCase().includes(query) ||
-        a.project.name.toLowerCase().includes(query) ||
-        a.project.client.name.toLowerCase().includes(query) ||
-        a.project.client.email.toLowerCase().includes(query)
+        a.projectName.toLowerCase().includes(query) ||
+        a.projectReference.toLowerCase().includes(query) ||
+        a.clientName.toLowerCase().includes(query) ||
+        (a.clientCompany?.toLowerCase().includes(query) ?? false) ||
+        a.stageLabel.toLowerCase().includes(query)
       )
     }
 
@@ -115,16 +112,11 @@ export function Approvals() {
         case 'createdAt':
           comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
           break
-        case 'sentAt':
-          const aDate = a.sentAt ? new Date(a.sentAt).getTime() : 0
-          const bDate = b.sentAt ? new Date(b.sentAt).getTime() : 0
-          comparison = aDate - bDate
-          break
         case 'status':
           comparison = a.status.localeCompare(b.status)
           break
-        case 'project':
-          comparison = a.project.name.localeCompare(b.project.name)
+        case 'projectName':
+          comparison = a.projectName.localeCompare(b.projectName)
           break
       }
       
@@ -140,9 +132,9 @@ export function Approvals() {
     const approved = approvals.filter(a => a.status === 'APPROVED').length
     const changesRequested = approvals.filter(a => a.status === 'CHANGES_REQUESTED').length
     const overdue = approvals.filter(a => {
-      if (a.status !== 'PENDING' || !a.sentAt) return false
-      const daysSinceSent = Math.floor((Date.now() - new Date(a.sentAt).getTime()) / (1000 * 60 * 60 * 24))
-      return daysSinceSent > 7
+      if (a.status !== 'PENDING') return false
+      const daysSinceCreated = Math.floor((Date.now() - new Date(a.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      return daysSinceCreated > 7
     }).length
     
     return { pending, approved, changesRequested, overdue }
@@ -205,7 +197,7 @@ export function Approvals() {
           value={stats.pending}
           icon={<Clock className="w-5 h-5" />}
           color="yellow"
-          onClick={() => setStatusFilter('PENDING')}
+          onClick={() => setStatusFilter(statusFilter === 'PENDING' ? 'all' : 'PENDING')}
           active={statusFilter === 'PENDING'}
         />
         <StatsCard
@@ -213,7 +205,7 @@ export function Approvals() {
           value={stats.approved}
           icon={<CheckCircle className="w-5 h-5" />}
           color="green"
-          onClick={() => setStatusFilter('APPROVED')}
+          onClick={() => setStatusFilter(statusFilter === 'APPROVED' ? 'all' : 'APPROVED')}
           active={statusFilter === 'APPROVED'}
         />
         <StatsCard
@@ -221,7 +213,7 @@ export function Approvals() {
           value={stats.changesRequested}
           icon={<AlertCircle className="w-5 h-5" />}
           color="orange"
-          onClick={() => setStatusFilter('CHANGES_REQUESTED')}
+          onClick={() => setStatusFilter(statusFilter === 'CHANGES_REQUESTED' ? 'all' : 'CHANGES_REQUESTED')}
           active={statusFilter === 'CHANGES_REQUESTED'}
         />
         <StatsCard
@@ -240,7 +232,7 @@ export function Approvals() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search approvals, projects, clients..."
+              placeholder="Search by project, client, stage..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -325,25 +317,25 @@ export function Approvals() {
                       )}
                     </button>
                   </th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Approval</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Stage</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">
                     <button
-                      onClick={() => toggleSort('project')}
+                      onClick={() => toggleSort('projectName')}
                       className="flex items-center gap-1 hover:text-gray-900"
                     >
                       Project / Client
-                      {sortField === 'project' && (
+                      {sortField === 'projectName' && (
                         <ChevronDown className={`w-4 h-4 transition ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
                       )}
                     </button>
                   </th>
                   <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">
                     <button
-                      onClick={() => toggleSort('sentAt')}
+                      onClick={() => toggleSort('createdAt')}
                       className="flex items-center gap-1 hover:text-gray-900"
                     >
-                      Sent
-                      {sortField === 'sentAt' && (
+                      Created
+                      {sortField === 'createdAt' && (
                         <ChevronDown className={`w-4 h-4 transition ${sortOrder === 'asc' ? 'rotate-180' : ''}`} />
                       )}
                     </button>
@@ -434,13 +426,8 @@ function ApprovalRow({ approval, onSendReminder, sendingReminder }: ApprovalRowP
   const config = statusConfig[approval.status]
   const StatusIcon = config.icon
 
-  const daysSinceSent = approval.sentAt
-    ? Math.floor((Date.now() - new Date(approval.sentAt).getTime()) / (1000 * 60 * 60 * 24))
-    : null
-
-  const isOverdue = approval.status === 'PENDING' && daysSinceSent !== null && daysSinceSent > 7
-
-  const approvalUrl = `${window.location.origin}/approve/${approval.token}`
+  const daysSinceCreated = Math.floor((Date.now() - new Date(approval.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+  const isOverdue = approval.status === 'PENDING' && daysSinceCreated > 7
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50">
@@ -452,60 +439,54 @@ function ApprovalRow({ approval, onSendReminder, sendingReminder }: ApprovalRowP
         </span>
       </td>
 
-      {/* Approval Title */}
+      {/* Stage */}
       <td className="py-3 px-4">
-        <Link 
-          to={`/dashboard/projects/${approval.project.id}`}
-          className="font-medium text-gray-900 hover:text-green-600"
-        >
-          {approval.title}
-        </Link>
-        {approval.deliverables.length > 0 && (
-          <p className="text-sm text-gray-500">
-            {approval.deliverables.length} deliverable{approval.deliverables.length !== 1 ? 's' : ''}
-          </p>
+        <span className="text-sm text-gray-900">{approval.stageLabel}</span>
+        {approval.hasDeliverable && (
+          <span className="ml-2 inline-flex items-center text-xs text-gray-500">
+            <FileText className="w-3 h-3 mr-1" />
+            Has file
+          </span>
         )}
       </td>
 
       {/* Project / Client */}
       <td className="py-3 px-4">
-        <div className="flex items-start gap-2">
-          <div>
-            <Link 
-              to={`/dashboard/projects/${approval.project.id}`}
-              className="text-sm font-medium text-gray-900 hover:text-green-600"
-            >
-              {approval.project.name}
-            </Link>
-            <div className="flex items-center gap-1 text-sm text-gray-500">
-              <User className="w-3.5 h-3.5" />
-              {approval.project.client.name}
-            </div>
+        <div>
+          <Link 
+            to={`/dashboard/projects/${approval.projectId}`}
+            className="text-sm font-medium text-gray-900 hover:text-green-600"
+          >
+            {approval.projectName}
+          </Link>
+          <span className="ml-2 text-xs text-gray-400">{approval.projectReference}</span>
+          <div className="flex items-center gap-1 text-sm text-gray-500">
+            <User className="w-3.5 h-3.5" />
+            {approval.clientName}
+            {approval.clientCompany && (
+              <span className="text-gray-400">• {approval.clientCompany}</span>
+            )}
           </div>
         </div>
       </td>
 
-      {/* Sent Date */}
+      {/* Created Date */}
       <td className="py-3 px-4">
-        {approval.sentAt ? (
-          <div>
-            <div className="text-sm text-gray-900">
-              {formatDate(approval.sentAt)}
-            </div>
-            {isOverdue && (
-              <span className="text-xs text-red-600 font-medium">
-                {daysSinceSent} days ago
-              </span>
-            )}
-            {!isOverdue && daysSinceSent !== null && (
-              <span className="text-xs text-gray-500">
-                {daysSinceSent === 0 ? 'Today' : `${daysSinceSent} day${daysSinceSent !== 1 ? 's' : ''} ago`}
-              </span>
-            )}
+        <div>
+          <div className="text-sm text-gray-900">
+            {formatDate(approval.createdAt)}
           </div>
-        ) : (
-          <span className="text-sm text-gray-400">Not sent</span>
-        )}
+          {isOverdue && (
+            <span className="text-xs text-red-600 font-medium">
+              {daysSinceCreated} days ago
+            </span>
+          )}
+          {!isOverdue && (
+            <span className="text-xs text-gray-500">
+              {daysSinceCreated === 0 ? 'Today' : `${daysSinceCreated} day${daysSinceCreated !== 1 ? 's' : ''} ago`}
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Response */}
@@ -515,27 +496,22 @@ function ApprovalRow({ approval, onSendReminder, sendingReminder }: ApprovalRowP
             <div className="text-sm text-gray-900">
               {formatDate(approval.respondedAt)}
             </div>
-            {approval.viewedAt && (
-              <span className="text-xs text-gray-500">
-                Viewed {formatDate(approval.viewedAt)}
-              </span>
-            )}
           </div>
-        ) : approval.viewedAt ? (
+        ) : approval.viewCount > 0 ? (
           <div>
             <span className="text-sm text-blue-600">Viewed</span>
-            <div className="text-xs text-gray-500">{formatDate(approval.viewedAt)}</div>
+            <div className="text-xs text-gray-500">{approval.viewCount} view{approval.viewCount !== 1 ? 's' : ''}</div>
           </div>
         ) : (
-          <span className="text-sm text-gray-400">—</span>
+          <span className="text-sm text-gray-400">Not viewed</span>
         )}
       </td>
 
       {/* Actions */}
       <td className="py-3 px-4">
         <div className="flex items-center justify-end gap-2">
-          {/* Quick Actions */}
-          {approval.status === 'PENDING' && approval.sentAt && (
+          {/* Send Reminder - only for pending */}
+          {approval.status === 'PENDING' && (
             <Button
               variant="ghost"
               size="sm"
@@ -550,16 +526,6 @@ function ApprovalRow({ approval, onSendReminder, sendingReminder }: ApprovalRowP
               )}
             </Button>
           )}
-
-          <a
-            href={approvalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 text-gray-400 hover:text-gray-600 transition"
-            title="View approval page"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
 
           {/* More Actions Dropdown */}
           <div className="relative">
@@ -578,46 +544,17 @@ function ApprovalRow({ approval, onSendReminder, sendingReminder }: ApprovalRowP
                 />
                 <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 min-w-[160px]">
                   <Link
-                    to={`/dashboard/projects/${approval.project.id}`}
+                    to={`/dashboard/projects/${approval.projectId}`}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => setShowActions(false)}
                   >
                     <Eye className="w-4 h-4" />
                     View Project
                   </Link>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(approvalUrl)
-                      setShowActions(false)
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Copy Link
-                  </button>
-                  {approval.status === 'PENDING' && !approval.sentAt && (
-                    <button
-                      onClick={() => {
-                        // TODO: Implement send approval
-                        setShowActions(false)
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                    >
-                      <Send className="w-4 h-4" />
-                      Send to Client
-                    </button>
-                  )}
-                  {approval.clientFeedback && (
-                    <button
-                      onClick={() => {
-                        alert(approval.clientFeedback)
-                        setShowActions(false)
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                    >
-                      <FileText className="w-4 h-4" />
-                      View Feedback
-                    </button>
+                  {approval.reminderCount > 0 && (
+                    <div className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+                      {approval.reminderCount} reminder{approval.reminderCount !== 1 ? 's' : ''} sent
+                    </div>
                   )}
                 </div>
               </>
