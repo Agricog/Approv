@@ -591,7 +591,7 @@ async function getCsrfToken(): Promise<string> {
       }
     )
     const data = await response.json()
-    return data.data?.token || ''
+    return data.token || ''
   } catch {
     return ''
   }
