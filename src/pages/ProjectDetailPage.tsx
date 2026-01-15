@@ -30,23 +30,23 @@ import { useApi } from '../hooks/useApi'
 
 interface Client {
   id: string
-  firstName: string
-  lastName: string
+  name: string
   email: string
   company: string | null
+  phone: string | null
 }
 
 interface Approval {
   id: string
+  token: string
   stage: string
   stageLabel: string
   status: 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'EXPIRED'
   createdAt: string
-  expiresAt: string
+  expiresAt: string | null
   respondedAt: string | null
   viewCount: number
   reminderCount: number
-  token: string
 }
 
 interface Project {
@@ -56,12 +56,16 @@ interface Project {
   description: string | null
   status: 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED'
   startDate: string | null
-  endDate: string | null
-  budget: number | null
+  targetCompletionDate: string | null
   client: Client
   approvals: Approval[]
   createdAt: string
   updatedAt: string
+}
+
+interface ApiResponse {
+  success: boolean
+  data: Project
 }
 
 // =============================================================================
@@ -71,7 +75,7 @@ interface Project {
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const api = useApi<{ data: Project }>()
+  const api = useApi<ApiResponse>()
   
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -96,9 +100,6 @@ export default function ProjectDetailPage() {
       
       if (result?.data) {
         setProject(result.data)
-      } else if (result && !result.data) {
-        // Handle if API returns project directly without data wrapper
-        setProject(result as unknown as Project)
       } else {
         setError('Project not found')
       }
@@ -255,9 +256,7 @@ export default function ProjectDetailPage() {
                 </h2>
                 <div className="space-y-3">
                   <div>
-                    <p className="font-medium text-gray-900">
-                      {project.client.firstName} {project.client.lastName}
-                    </p>
+                    <p className="font-medium text-gray-900">{project.client.name}</p>
                     <p className="text-sm text-gray-500">{project.client.email}</p>
                   </div>
                   {project.client.company && (
@@ -276,22 +275,14 @@ export default function ProjectDetailPage() {
                   Project Details
                 </h2>
                 <div className="space-y-4">
-                  {project.startDate && (
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Start Date</p>
+                    <p className="text-sm font-medium text-gray-900">{formatDate(project.startDate)}</p>
+                  </div>
+                  {project.targetCompletionDate && (
                     <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Start Date</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(project.startDate)}</p>
-                    </div>
-                  )}
-                  {project.endDate && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">End Date</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(project.endDate)}</p>
-                    </div>
-                  )}
-                  {project.budget && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide">Budget</p>
-                      <p className="text-sm font-medium text-gray-900">£{project.budget.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Target Completion</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(project.targetCompletionDate)}</p>
                     </div>
                   )}
                   <div>
@@ -328,7 +319,7 @@ export default function ProjectDetailPage() {
                 ) : (
                   <div className="divide-y divide-gray-200">
                     {project.approvals.map((approval) => {
-                      const statusBadge = getApprovalStatusBadge(approval.status)
+                      const approvalStatusBadge = getApprovalStatusBadge(approval.status)
                       const isPending = approval.status === 'PENDING'
                       
                       return (
@@ -337,8 +328,8 @@ export default function ProjectDetailPage() {
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
                                 <h3 className="font-medium text-gray-900">{approval.stageLabel}</h3>
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge.bg} ${statusBadge.text}`}>
-                                  {statusBadge.label}
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${approvalStatusBadge.bg} ${approvalStatusBadge.text}`}>
+                                  {approvalStatusBadge.label}
                                 </span>
                               </div>
                               
@@ -358,7 +349,7 @@ export default function ProjectDetailPage() {
                                 </p>
                               )}
 
-                              {isPending && (
+                              {isPending && approval.expiresAt && (
                                 <p className="text-sm text-amber-600 mt-1">
                                   Expires: {formatDate(approval.expiresAt)}
                                 </p>
@@ -366,7 +357,7 @@ export default function ProjectDetailPage() {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {isPending && (
+                              {isPending && approval.token && (
                                 <a
                                   href={`https://approv.co.uk/approve/${approval.token}`}
                                   target="_blank"
