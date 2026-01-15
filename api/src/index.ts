@@ -16,10 +16,6 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { securityHeaders } from './middleware/security.js'
 import { rateLimiter } from './middleware/rateLimit.js'
 import { csrfProtection } from './middleware/csrf.js'
-import { uploadRoutes } from './routes/uploads.js'
-import { dropboxRoutes } from './routes/dropbox.js'
-import { mondayRoutes } from './routes/monday.js'
-import { activityRoutes } from './routes/activity.js'
 import { requestValidator } from './middleware/validation.js'
 
 // Routes
@@ -31,6 +27,12 @@ import { clientRoutes } from './routes/clients.js' // ← NEW: Clients route
 import { dashboardRoutes } from './routes/dashboard.js'
 import { portalRoutes } from './routes/portal.js'
 import { webhookRoutes } from './routes/webhooks.js'
+import { uploadRoutes } from './routes/uploads.js'
+import { dropboxRoutes } from './routes/dropbox.js'
+import { mondayRoutes } from './routes/monday.js'
+import { activityRoutes } from './routes/activity.js'
+import { organizationRoutes } from './routes/organizations.js'
+import { requestValidator } from './middleware/validation.js'
 import { notificationRoutes } from './routes/notifications.js'
 
 // =============================================================================
