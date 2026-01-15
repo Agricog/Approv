@@ -2,7 +2,6 @@
  * Storage Service
  * Handles file uploads to Cloudflare R2
  */
-
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createLogger } from '../lib/logger.js'
@@ -27,6 +26,9 @@ const s3Client = R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
         accessKeyId: R2_ACCESS_KEY_ID,
         secretAccessKey: R2_SECRET_ACCESS_KEY,
       },
+      // Disable checksum for R2 compatibility
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     })
   : null
 
@@ -60,7 +62,7 @@ export function isStorageConfigured(): boolean {
 }
 
 /**
- * Upload a file to R2
+ * Upload a file to R2 (server-side)
  */
 export async function uploadFile(
   buffer: Buffer,
@@ -82,12 +84,6 @@ export async function uploadFile(
       Key: key,
       Body: buffer,
       ContentType: contentType,
-      Metadata: {
-        originalName: filename,
-        organizationId: metadata.organizationId,
-        projectId: metadata.projectId || '',
-        approvalId: metadata.approvalId || '',
-      },
     }))
 
     logger.info({ key, size: buffer.length, contentType }, 'File uploaded to R2')
@@ -140,12 +136,13 @@ export async function getSignedUploadUrl(
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
-      ContentType: contentType
+      ContentType: contentType,
     })
 
+    // Generate presigned URL with minimal headers for CORS compatibility
     const uploadUrl = await getSignedUrl(s3Client, command, { 
       expiresIn: 3600,
-      signableHeaders: new Set(['content-type', 'host'])
+      unhoistableHeaders: new Set(['x-amz-checksum-crc32']),
     })
 
     logger.info({ key, contentType }, 'Signed upload URL generated')
@@ -156,6 +153,7 @@ export async function getSignedUploadUrl(
     return null
   }
 }
+
 /**
  * Delete a file from R2
  */
