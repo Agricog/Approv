@@ -57,7 +57,7 @@ interface Project {
 function ApprovalLink(props: { token: string }) {
   const url = 'https://approv.co.uk/approve/' + props.token
   return (
-    
+    <a
       href={url}
       target="_blank"
       rel="noopener noreferrer"
