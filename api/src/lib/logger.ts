@@ -4,7 +4,6 @@
  * SECURITY: Never log sensitive data
  */
 import pino from 'pino'
-import { prisma, Prisma } from './prisma.js'
 
 // =============================================================================
 // CONFIGURATION
@@ -210,25 +209,29 @@ export function logAudit(entry: AuditLogEntry): void {
     metadata: entry.metadata ? safeLog(entry.metadata) : undefined
   }, 'Audit: ' + entry.action)
 
-  // Write to database (async, non-blocking)
+  // Write to database (async, non-blocking, dynamic import to avoid circular dependency)
   if (entry.organizationId) {
-    prisma.auditLog.create({
-      data: {
-        action: entry.action,
-        entityType: entry.entityType,
-        entityId: entry.entityId,
-        organizationId: entry.organizationId,
-        userId: entry.userId,
-        projectId: entry.projectId,
-        approvalId: entry.approvalId,
-        ipAddress: entry.ipAddress,
-        userAgent: entry.userAgent,
-        metadata: entry.metadata as Prisma.InputJsonValue,
-        previousState: entry.previousState ? safeLog(entry.previousState) as Prisma.InputJsonValue : Prisma.JsonNull,
-        newState: entry.newState ? safeLog(entry.newState) as Prisma.InputJsonValue : Prisma.JsonNull
-      }
+    import('./prisma.js').then(({ prisma, Prisma }) => {
+      prisma.auditLog.create({
+        data: {
+          action: entry.action,
+          entityType: entry.entityType,
+          entityId: entry.entityId,
+          organizationId: entry.organizationId!,
+          userId: entry.userId,
+          projectId: entry.projectId,
+          approvalId: entry.approvalId,
+          ipAddress: entry.ipAddress,
+          userAgent: entry.userAgent,
+          metadata: entry.metadata as Prisma.InputJsonValue,
+          previousState: entry.previousState ? safeLog(entry.previousState) as Prisma.InputJsonValue : Prisma.JsonNull,
+          newState: entry.newState ? safeLog(entry.newState) as Prisma.InputJsonValue : Prisma.JsonNull
+        }
+      }).catch(err => {
+        auditLogger.error({ err }, 'Failed to write audit log to database')
+      })
     }).catch(err => {
-      auditLogger.error({ err, entry }, 'Failed to write audit log to database')
+      auditLogger.error({ err }, 'Failed to import prisma for audit log')
     })
   }
 }
