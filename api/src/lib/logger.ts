@@ -4,7 +4,7 @@
  * SECURITY: Never log sensitive data
  */
 import pino from 'pino'
-import { prisma } from './prisma.js'
+import { prisma, Prisma } from './prisma.js'
 
 // =============================================================================
 // CONFIGURATION
@@ -223,9 +223,9 @@ export function logAudit(entry: AuditLogEntry): void {
         approvalId: entry.approvalId,
         ipAddress: entry.ipAddress,
         userAgent: entry.userAgent,
-        metadata: entry.metadata || undefined,
-        previousState: entry.previousState ? safeLog(entry.previousState) : undefined,
-        newState: entry.newState ? safeLog(entry.newState) : undefined
+        metadata: entry.metadata as Prisma.InputJsonValue,
+        previousState: entry.previousState ? safeLog(entry.previousState) as Prisma.InputJsonValue : Prisma.JsonNull,
+        newState: entry.newState ? safeLog(entry.newState) as Prisma.InputJsonValue : Prisma.JsonNull
       }
     }).catch(err => {
       auditLogger.error({ err, entry }, 'Failed to write audit log to database')
