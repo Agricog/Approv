@@ -22,6 +22,7 @@ import CreateProjectPage from './pages/CreateProjectPage'
 import CreateApprovalPage from './pages/CreateApprovalPage'
 import ClientsPage from './pages/ClientsPage'
 import CreateClientPage from './pages/CreateClientPage'
+import ActivityPage from './pages/ActivityPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 
 // Approval components
@@ -245,6 +246,7 @@ export default function App() {
               <Route path="/dashboard/notifications" element={<ProtectedRoute><ActivityPage /></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/dashboard/settings/dropbox/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/dashboard/activity" element={<ActivityPage />} />
               <Route path="/dashboard/settings/monday/callback" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
               {/* Redirects */}
