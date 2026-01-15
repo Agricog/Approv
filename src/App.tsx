@@ -23,6 +23,7 @@ import CreateApprovalPage from './pages/CreateApprovalPage'
 import ClientsPage from './pages/ClientsPage'
 import CreateClientPage from './pages/CreateClientPage'
 import ActivityPage from './pages/ActivityPage'
+import ClientDetailPage from './pages/ClientDetailPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 
 // Approval components
@@ -224,6 +225,7 @@ export default function App() {
               
               {/* Dashboard - Clients */}
               <Route path="/dashboard/clients" element={<ProtectedRoute><DashboardLayout><ClientsPage /></DashboardLayout></ProtectedRoute>} />
+              <Route path="/dashboard/clients/:clientId" element={<ProtectedRoute><DashboardLayout><ClientDetailPage /></DashboardLayout></ProtectedRoute>} />
               <Route path="/dashboard/clients/new" element={<ProtectedRoute><DashboardLayout><CreateClientPage /></DashboardLayout></ProtectedRoute>} />
               
               {/* Dashboard - Other */}
