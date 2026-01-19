@@ -182,7 +182,7 @@ enum ProjectMemberRole {
 model Approval {
   id                String          @id @default(cuid())
   token             String          @unique @default(cuid())
-  stage             ProjectStage
+  stage             String
   stageLabel        String
   status            ApprovalStatus  @default(PENDING)
   deliverableUrl    String?
