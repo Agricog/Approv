@@ -32,6 +32,7 @@ export type ValidationSchema = Record<string, ValidationRule>
 
 /**
  * Sanitize string input to prevent XSS
+ * Allows safe characters including apostrophes and common punctuation
  */
 export function sanitizeString(input: string): string {
   return DOMPurify.sanitize(input, { 
@@ -162,7 +163,12 @@ export const VALIDATION_PATTERNS = {
   phone: /^[\d\s\-\+\(\)]+$/,
   alphanumeric: /^[a-zA-Z0-9]+$/,
   alphanumericWithSpaces: /^[a-zA-Z0-9\s]+$/,
-  noSpecialChars: /^[a-zA-Z0-9\s\-_]+$/
+  // Allow common punctuation: apostrophes, commas, periods, ampersands, hyphens, quotes, etc.
+  projectName: /^[a-zA-Z0-9\s\-_'""',.&()#/:@£$€!?]+$/,
+  // Reference codes - alphanumeric with hyphens and slashes
+  referenceCode: /^[a-zA-Z0-9\-_/]+$/,
+  // Stage labels - allow most characters for flexibility
+  stageLabel: /^[a-zA-Z0-9\s\-_'""',.&()#/:]+$/
 } as const
 
 // =============================================================================
@@ -174,16 +180,46 @@ export const PROJECT_VALIDATION: ValidationSchema = {
     required: true,
     minLength: 2,
     maxLength: 100,
-    pattern: VALIDATION_PATTERNS.noSpecialChars
+    pattern: VALIDATION_PATTERNS.projectName
   },
   reference: {
     required: true,
     minLength: 2,
     maxLength: 50,
-    pattern: VALIDATION_PATTERNS.alphanumeric
+    pattern: VALIDATION_PATTERNS.referenceCode
   },
   clientId: {
     required: true
+  }
+}
+
+export const CLIENT_VALIDATION: ValidationSchema = {
+  firstName: {
+    required: true,
+    minLength: 1,
+    maxLength: 50,
+    pattern: VALIDATION_PATTERNS.projectName
+  },
+  lastName: {
+    required: true,
+    minLength: 1,
+    maxLength: 50,
+    pattern: VALIDATION_PATTERNS.projectName
+  },
+  email: {
+    required: true,
+    maxLength: 255,
+    pattern: VALIDATION_PATTERNS.email
+  },
+  company: {
+    required: false,
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.projectName
+  },
+  phone: {
+    required: false,
+    maxLength: 30,
+    pattern: VALIDATION_PATTERNS.phone
   }
 }
 
@@ -199,13 +235,16 @@ export const APPROVAL_VALIDATION: ValidationSchema = {
   stageLabel: {
     required: true,
     minLength: 2,
-    maxLength: 100
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.stageLabel
   },
   deliverableUrl: {
     required: false,
     maxLength: 500,
     custom: (value) => {
       if (!value) return null
+      // Allow r2: prefixed URLs (internal file storage)
+      if (value.startsWith('r2:')) return null
       const sanitized = sanitizeUrl(value)
       if (!sanitized) return 'Invalid URL format'
       return null
@@ -213,7 +252,8 @@ export const APPROVAL_VALIDATION: ValidationSchema = {
   },
   deliverableName: {
     required: false,
-    maxLength: 100
+    maxLength: 100,
+    pattern: VALIDATION_PATTERNS.projectName
   },
   expiryDays: {
     required: false,
@@ -227,7 +267,3 @@ export const APPROVAL_VALIDATION: ValidationSchema = {
     }
   }
 }
-
-// =============================================================================
-// COMMON VALIDATION SCHEMAS
-// ==
