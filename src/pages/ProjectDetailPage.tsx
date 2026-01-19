@@ -94,6 +94,10 @@ interface ResubmitModalProps {
 }
 
 function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModalProps) {
+  const presignApi = useApi<{ key: string; uploadUrl: string }>()
+  const confirmApi = useApi<{ key: string; downloadUrl: string }>()
+  const resubmitApi = useApi<{ id: string; token: string; status: string }>()
+  
   const [deliverableType, setDeliverableType] = useState<'PDF' | 'IMAGE' | 'LINK' | null>(
     approval.deliverableType as 'PDF' | 'IMAGE' | 'LINK' | null
   )
@@ -105,16 +109,6 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
-  // Get CSRF token
-  const [csrfToken, setCsrfToken] = useState<string | null>(null)
-  
-  useEffect(() => {
-    fetch('/api/csrf-token', { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => setCsrfToken(data.token))
-      .catch(() => {})
-  }, [])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -137,29 +131,24 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
     
     try {
       // Get presigned upload URL
-      const presignResponse = await fetch('/api/uploads/presign', {
+      const presignResult = await presignApi.execute('/api/uploads/presign', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken || ''
-        },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           filename: file.name,
           contentType: file.type,
+          type: 'deliverable',
           projectId
-        })
+        }
       })
       
-      if (!presignResponse.ok) {
-        throw new Error('Failed to get upload URL')
+      if (!presignResult) {
+        throw new Error(presignApi.error?.message || 'Failed to get upload URL')
       }
       
-      const { uploadUrl, key } = await presignResponse.json()
       setUploadProgress(30)
       
       // Upload to R2
-      const uploadResponse = await fetch(uploadUrl, {
+      const uploadResponse = await fetch(presignResult.uploadUrl, {
         method: 'PUT',
         body: file,
         headers: {
@@ -174,21 +163,12 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
       setUploadProgress(80)
       
       // Confirm upload
-      const confirmResponse = await fetch('/api/uploads/confirm', {
+      const confirmResult = await confirmApi.execute('/api/uploads/confirm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken || ''
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          key,
-          filename: file.name,
-          projectId
-        })
+        body: { key: presignResult.key }
       })
       
-      if (!confirmResponse.ok) {
+      if (!confirmResult) {
         throw new Error('Failed to confirm upload')
       }
       
@@ -196,7 +176,7 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
       
       // Return R2 key with prefix
       return {
-        url: 'r2:' + key,
+        url: 'r2:' + presignResult.key,
         name: file.name
       }
     } catch (err) {
@@ -231,24 +211,18 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
       }
       
       // Call resubmit API
-      const response = await fetch('/api/approvals/' + approval.id + '/resubmit', {
+      const result = await resubmitApi.execute('/api/approvals/' + approval.id + '/resubmit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': csrfToken || ''
-        },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           deliverableUrl: finalUrl,
           deliverableName: finalName,
           deliverableType: finalType,
           expiryDays: 14
-        })
+        }
       })
       
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to resubmit approval')
+      if (!result) {
+        throw new Error(resubmitApi.error?.message || 'Failed to resubmit approval')
       }
       
       setSuccess(true)
