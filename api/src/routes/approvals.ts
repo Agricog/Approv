@@ -242,6 +242,132 @@ router.get(
 )
 
 /**
+ * POST /api/approvals/:id/resubmit
+ * Resubmit approval after changes requested (authenticated)
+ */
+router.post(
+  '/:id/resubmit',
+  csrfProtection,
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params
+    const { organizationId, user } = req
+    const { deliverableUrl, deliverableName, deliverableType, expiryDays = 14 } = req.body
+
+    // Find the approval
+    const approval = await prisma.approval.findFirst({
+      where: {
+        id,
+        project: { organizationId }
+      },
+      include: {
+        client: true,
+        project: {
+          include: {
+            organization: {
+              select: { name: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!approval) {
+      throw new NotFoundError('Approval')
+    }
+
+    // Only allow resubmit for CHANGES_REQUESTED status
+    if (approval.status !== 'CHANGES_REQUESTED') {
+      throw new AppError(
+        400,
+        'INVALID_STATUS',
+        'Only approvals with "Changes Requested" status can be resubmitted'
+      )
+    }
+
+    // Store previous state for audit
+    const previousState = {
+      status: approval.status,
+      deliverableUrl: approval.deliverableUrl,
+      deliverableName: approval.deliverableName,
+      responseNotes: approval.responseNotes
+    }
+
+    // Update the approval - reset to PENDING with new deliverable
+    const updatedApproval = await prisma.approval.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        deliverableUrl: deliverableUrl || approval.deliverableUrl,
+        deliverableName: deliverableName || approval.deliverableName,
+        deliverableType: deliverableType || approval.deliverableType,
+        expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+        // Reset response fields
+        respondedAt: null,
+        responseNotes: null,
+        responseTimeHours: null,
+        // Reset view tracking for this revision
+        viewCount: 0,
+        viewedAt: null,
+        // Keep reminder count for history but reset last reminder
+        lastReminderAt: null,
+        updatedAt: new Date()
+      }
+    })
+
+    // Log audit trail
+    logAudit({
+      action: 'approval.resubmitted',
+      entityType: 'approval',
+      entityId: approval.id,
+      organizationId: organizationId!,
+      userId: user!.id,
+      metadata: {
+        projectId: approval.projectId,
+        stage: approval.stage,
+        previousFeedback: previousState.responseNotes,
+        hasNewDeliverable: !!deliverableUrl
+      },
+      previousState,
+      newState: {
+        status: 'PENDING',
+        deliverableUrl: updatedApproval.deliverableUrl,
+        deliverableName: updatedApproval.deliverableName
+      }
+    })
+
+    logger.info({
+      approvalId: id,
+      projectId: approval.projectId,
+      stage: approval.stage,
+      hasNewDeliverable: !!deliverableUrl
+    }, 'Approval resubmitted')
+
+    // Send new approval request email to client
+    sendApprovalRequest({
+      to: approval.client.email,
+      clientName: approval.client.firstName,
+      projectName: approval.project.name,
+      stageName: `${approval.stageLabel} (Revised)`,
+      approvalToken: approval.token,
+      organizationName: approval.project.organization?.name || 'Your architect'
+    }).catch(err => logger.error({ err }, 'Failed to send resubmit approval email'))
+
+    res.json({
+      success: true,
+      data: {
+        id: updatedApproval.id,
+        token: updatedApproval.token,
+        status: updatedApproval.status,
+        approvalUrl: `https://approv.co.uk/approve/${updatedApproval.token}`,
+        expiresAt: updatedApproval.expiresAt.toISOString(),
+        message: 'Approval resubmitted successfully. Client will receive a new email.'
+      }
+    })
+  })
+)
+
+/**
  * POST /api/approvals/:id/remind
  * Send reminder for pending approval (authenticated)
  */
