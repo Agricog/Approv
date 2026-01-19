@@ -14,7 +14,8 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowRight,
-  BarChart3
+  BarChart3,
+  RefreshCw
 } from 'lucide-react'
 import { 
   DashboardLayout, 
@@ -29,7 +30,7 @@ import {
 } from '../../components/common'
 import { useApi } from '../../hooks'
 import { formatRelativeTime, formatNumber, formatPercentage } from '../../utils/formatters'
-import type { DashboardMetrics, Bottleneck } from '../../types'
+import type { DashboardMetrics } from '../../types'
 
 // =============================================================================
 // TYPES
@@ -38,7 +39,7 @@ import type { DashboardMetrics, Bottleneck } from '../../types'
 interface DashboardData {
   metrics: DashboardMetrics
   recentActivity: ActivityItem[]
-  bottlenecks: Bottleneck[]
+  bottlenecks: BottleneckItem[]
 }
 
 interface ActivityItem {
@@ -48,6 +49,18 @@ interface ActivityItem {
   projectName: string
   timestamp: string
   status?: string
+}
+
+interface BottleneckItem {
+  id: string
+  projectId: string
+  projectName: string
+  stageLabel: string
+  clientName: string
+  daysPending: number
+  status: 'PENDING' | 'CHANGES_REQUESTED'
+  urgency: 'critical' | 'high' | 'medium' | 'low'
+  actionRequired: string
 }
 
 // =============================================================================
@@ -165,7 +178,7 @@ export function DashboardHome() {
               {data.recentActivity.length > 0 ? (
                 <div className="space-y-4">
                   {data.recentActivity.slice(0, 5).map(item => (
-                    <ActivityItem key={item.id} item={item} />
+                    <ActivityItemComponent key={item.id} item={item} />
                   ))}
                 </div>
               ) : (
@@ -175,10 +188,10 @@ export function DashboardHome() {
               )}
             </ContentCard>
 
-            {/* Bottlenecks */}
+            {/* Attention Needed - Now shows both pending and changes requested */}
             <ContentCard
               title="Attention Needed"
-              description="Approvals waiting longest"
+              description="Approvals requiring action"
               actions={
                 <Link to="/dashboard/approvals" className="text-sm text-green-600 hover:text-green-700">
                   View all
@@ -188,14 +201,14 @@ export function DashboardHome() {
               {data.bottlenecks.length > 0 ? (
                 <div className="space-y-3">
                   {data.bottlenecks.slice(0, 5).map(bottleneck => (
-                    <BottleneckItem key={bottleneck.id} bottleneck={bottleneck} />
+                    <BottleneckItemComponent key={bottleneck.id} bottleneck={bottleneck} />
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <CheckCircle size={32} className="mx-auto text-green-500 mb-2" />
                   <p className="text-gray-600">All caught up!</p>
-                  <p className="text-sm text-gray-500">No bottlenecks detected</p>
+                  <p className="text-sm text-gray-500">No items need attention</p>
                 </div>
               )}
             </ContentCard>
@@ -293,7 +306,7 @@ interface ActivityItemProps {
   item: ActivityItem
 }
 
-function ActivityItem({ item }: ActivityItemProps) {
+function ActivityItemComponent({ item }: ActivityItemProps) {
   const getIcon = () => {
     switch (item.type) {
       case 'approval':
@@ -320,26 +333,44 @@ function ActivityItem({ item }: ActivityItemProps) {
   )
 }
 
-interface BottleneckItemProps {
-  bottleneck: Bottleneck
+interface BottleneckItemComponentProps {
+  bottleneck: BottleneckItem
 }
 
-function BottleneckItem({ bottleneck }: BottleneckItemProps) {
+function BottleneckItemComponent({ bottleneck }: BottleneckItemComponentProps) {
+  const isChangesRequested = bottleneck.status === 'CHANGES_REQUESTED'
+  
   return (
     <Link 
       to={`/dashboard/projects/${bottleneck.projectId}`}
-      className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors"
+      className={`
+        flex items-center justify-between p-3 rounded-lg transition-colors
+        ${isChangesRequested 
+          ? 'bg-orange-50 hover:bg-orange-100 border border-orange-200' 
+          : 'hover:bg-gray-50'
+        }
+      `}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">
-          {bottleneck.projectName}
-        </p>
+        <div className="flex items-center gap-2 mb-1">
+          {isChangesRequested && (
+            <RefreshCw size={14} className="text-orange-600 flex-shrink-0" />
+          )}
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {bottleneck.projectName}
+          </p>
+        </div>
         <p className="text-xs text-gray-500">
           {bottleneck.stageLabel} • {bottleneck.clientName}
         </p>
+        <p className={`text-xs mt-1 ${
+          isChangesRequested ? 'text-orange-600 font-medium' : 'text-gray-400'
+        }`}>
+          {bottleneck.actionRequired}
+        </p>
       </div>
       
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
         <span className={`text-sm font-medium ${
           bottleneck.urgency === 'critical' ? 'text-red-600' :
           bottleneck.urgency === 'high' ? 'text-orange-600' :
@@ -348,12 +379,22 @@ function BottleneckItem({ bottleneck }: BottleneckItemProps) {
         }`}>
           {bottleneck.daysPending}d
         </span>
-        <StatusBadge 
-          status={bottleneck.urgency as 'warning' | 'error'} 
-          label={bottleneck.urgency}
-          size="sm" 
-          showIcon={false}
-        />
+        {isChangesRequested ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+            Changes
+          </span>
+        ) : (
+          <StatusBadge 
+            status={
+              bottleneck.urgency === 'critical' || bottleneck.urgency === 'high' 
+                ? 'warning' 
+                : 'info'
+            } 
+            label={bottleneck.urgency}
+            size="sm" 
+            showIcon={false}
+          />
+        )}
       </div>
     </Link>
   )
