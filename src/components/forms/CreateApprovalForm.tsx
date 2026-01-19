@@ -135,14 +135,11 @@ export default function CreateApprovalForm({
         ...prev,
         data: {
           ...prev.data,
-          stage: '',
+          stage: 'CUSTOM_STAGE', // Provide default valid value
           stageLabel: ''
         },
-        errors: {
-          ...prev.errors,
-          stage: '',
-          stageLabel: ''
-        }
+        errors: {}, // Clear all errors when switching to custom
+        submitError: null
       }))
     } else {
       setShowCustomStage(false)
@@ -153,11 +150,8 @@ export default function CreateApprovalForm({
           stage: value,
           stageLabel: selectedStage?.label || ''
         },
-        errors: {
-          ...prev.errors,
-          stage: '',
-          stageLabel: ''
-        }
+        errors: {}, // Clear all errors when selecting preset
+        submitError: null
       }))
     }
   }, [])
@@ -299,6 +293,24 @@ export default function CreateApprovalForm({
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // For custom stage, ensure both fields are filled
+    if (showCustomStage) {
+      const customErrors: Record<string, string> = {}
+      if (!state.data.stage || state.data.stage.length < 2) {
+        customErrors.stage = 'Stage code is required (min 2 characters)'
+      }
+      if (!state.data.stageLabel || state.data.stageLabel.length < 2) {
+        customErrors.stageLabel = 'Stage display name is required (min 2 characters)'
+      }
+      if (Object.keys(customErrors).length > 0) {
+        setState(prev => ({
+          ...prev,
+          errors: customErrors
+        }))
+        return
+      }
+    }
+
     // Client-side validation
     const validation = validateForm(state.data, APPROVAL_VALIDATION)
     
@@ -380,7 +392,7 @@ export default function CreateApprovalForm({
         submitError: err instanceof Error ? err.message : 'Failed to create approval. Please try again.'
       }))
     }
-  }, [state.data, uploadState, api, projectId, onSuccess])
+  }, [state.data, uploadState, api, projectId, onSuccess, showCustomStage])
 
   // Success state
   if (state.isSuccess && state.createdApproval) {
@@ -491,11 +503,10 @@ export default function CreateApprovalForm({
           value={showCustomStage ? 'CUSTOM' : state.data.stage}
           onChange={(e) => handleStageChange(e.target.value)}
           className={'w-full px-4 py-2 rounded-lg border ' + (
-            state.errors.stage ? 'border-red-300 bg-red-50' : 'border-gray-300'
+            state.errors.stage && !showCustomStage ? 'border-red-300 bg-red-50' : 'border-gray-300'
           ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
-          aria-invalid={!!state.errors.stage}
-          aria-describedby={state.errors.stage ? 'stage-error' : undefined}
-          required
+          aria-invalid={!!state.errors.stage && !showCustomStage}
+          aria-describedby={state.errors.stage && !showCustomStage ? 'stage-error' : undefined}
         >
           <option value="">Select a stage...</option>
           {APPROVAL_STAGES.map(stage => (
@@ -504,7 +515,7 @@ export default function CreateApprovalForm({
             </option>
           ))}
         </select>
-        {state.errors.stage && (
+        {state.errors.stage && !showCustomStage && (
           <p id="stage-error" className="text-sm text-red-600 mt-1" role="alert">
             {state.errors.stage}
           </p>
@@ -523,14 +534,18 @@ export default function CreateApprovalForm({
               id="stageCode"
               value={state.data.stage}
               onChange={(e) => handleInputChange('stage', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
-              placeholder="e.g., CUSTOM_STAGE"
+              placeholder="e.g., CUSTOM_REVIEW"
               maxLength={50}
               className={'w-full px-4 py-2 rounded-lg border ' + (
                 state.errors.stage ? 'border-red-300 bg-red-50' : 'border-gray-300'
               ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
-              required
             />
             <p className="text-xs text-gray-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
+            {state.errors.stage && (
+              <p className="text-sm text-red-600 mt-1" role="alert">
+                {state.errors.stage}
+              </p>
+            )}
           </div>
 
           <div>
@@ -547,8 +562,12 @@ export default function CreateApprovalForm({
               className={'w-full px-4 py-2 rounded-lg border ' + (
                 state.errors.stageLabel ? 'border-red-300 bg-red-50' : 'border-gray-300'
               ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
-              required
             />
+            {state.errors.stageLabel && (
+              <p className="text-sm text-red-600 mt-1" role="alert">
+                {state.errors.stageLabel}
+              </p>
+            )}
           </div>
         </>
       )}
