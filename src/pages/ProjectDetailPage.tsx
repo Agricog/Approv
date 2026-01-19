@@ -1,8 +1,9 @@
 /**
  * ProjectDetailPage Component
  * Shows project details and associated approvals
+ * Includes resubmit functionality for changes requested
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, 
@@ -15,7 +16,14 @@ import {
   Send,
   Eye,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  RefreshCw,
+  Upload,
+  X,
+  FileText,
+  Image,
+  Link as LinkIcon,
+  CheckCircle
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
@@ -40,6 +48,9 @@ interface Approval {
   responseNotes: string | null
   viewCount: number
   reminderCount: number
+  deliverableUrl?: string | null
+  deliverableName?: string | null
+  deliverableType?: string | null
 }
 
 interface Project {
@@ -71,6 +82,405 @@ function ApprovalLink(props: { token: string }) {
   )
 }
 
+// =============================================================================
+// RESUBMIT MODAL COMPONENT
+// =============================================================================
+
+interface ResubmitModalProps {
+  approval: Approval
+  projectId: string
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModalProps) {
+  const [deliverableType, setDeliverableType] = useState<'PDF' | 'IMAGE' | 'LINK' | null>(
+    approval.deliverableType as 'PDF' | 'IMAGE' | 'LINK' | null
+  )
+  const [externalUrl, setExternalUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+  const [uploadedName, setUploadedName] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  // Get CSRF token
+  const [csrfToken, setCsrfToken] = useState<string | null>(null)
+  
+  useEffect(() => {
+    fetch('/api/csrf-token', { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => setCsrfToken(data.token))
+      .catch(() => {})
+  }, [])
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (selectedFile) {
+      // Validate file size (10MB max)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError('File size must be less than 10MB')
+        return
+      }
+      setFile(selectedFile)
+      setError(null)
+    }
+  }
+
+  const uploadFile = async (): Promise<{ url: string; name: string } | null> => {
+    if (!file) return null
+    
+    setUploading(true)
+    setUploadProgress(0)
+    
+    try {
+      // Get presigned upload URL
+      const presignResponse = await fetch('/api/uploads/presign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken || ''
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          projectId
+        })
+      })
+      
+      if (!presignResponse.ok) {
+        throw new Error('Failed to get upload URL')
+      }
+      
+      const { uploadUrl, key } = await presignResponse.json()
+      setUploadProgress(30)
+      
+      // Upload to R2
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      })
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file')
+      }
+      
+      setUploadProgress(80)
+      
+      // Confirm upload
+      const confirmResponse = await fetch('/api/uploads/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken || ''
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          key,
+          filename: file.name,
+          projectId
+        })
+      })
+      
+      if (!confirmResponse.ok) {
+        throw new Error('Failed to confirm upload')
+      }
+      
+      setUploadProgress(100)
+      
+      // Return R2 key with prefix
+      return {
+        url: 'r2:' + key,
+        name: file.name
+      }
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { component: 'ResubmitModal', action: 'upload' }
+      })
+      throw err
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    setError(null)
+    setSubmitting(true)
+    
+    try {
+      let finalUrl: string | null = null
+      let finalName: string | null = null
+      let finalType: string | null = deliverableType
+      
+      // Handle file upload
+      if (deliverableType && deliverableType !== 'LINK' && file) {
+        const uploadResult = await uploadFile()
+        if (uploadResult) {
+          finalUrl = uploadResult.url
+          finalName = uploadResult.name
+        }
+      } else if (deliverableType === 'LINK' && externalUrl) {
+        finalUrl = externalUrl
+        finalName = 'External Link'
+      }
+      
+      // Call resubmit API
+      const response = await fetch('/api/approvals/' + approval.id + '/resubmit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken || ''
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          deliverableUrl: finalUrl,
+          deliverableName: finalName,
+          deliverableType: finalType,
+          expiryDays: 14
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to resubmit approval')
+      }
+      
+      setSuccess(true)
+      
+      // Wait a moment to show success, then close
+      setTimeout(() => {
+        onSuccess()
+        onClose()
+      }, 1500)
+      
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { component: 'ResubmitModal', action: 'submit' }
+      })
+      setError(err instanceof Error ? err.message : 'Failed to resubmit')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        {/* Backdrop */}
+        <div 
+          className="fixed inset-0 bg-black/50 transition-opacity"
+          onClick={onClose}
+        />
+        
+        {/* Modal */}
+        <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          {/* Success state */}
+          {success ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Resubmitted Successfully
+              </h3>
+              <p className="text-gray-600">
+                Client will receive a new email notification.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Header */}
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <RefreshCw className="w-5 h-5 text-orange-600" />
+                  Resubmit for Approval
+                </h2>
+                <p className="text-gray-600 mt-1">
+                  {approval.stageLabel}
+                </p>
+              </div>
+              
+              {/* Previous feedback */}
+              {approval.responseNotes && (
+                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm font-medium text-orange-800 mb-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Client Feedback
+                  </div>
+                  <p className="text-sm text-orange-700">{approval.responseNotes}</p>
+                </div>
+              )}
+              
+              {/* Deliverable type selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Upload Revised Deliverable (Optional)
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeliverableType('PDF')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
+                      deliverableType === 'PDF'
+                        ? 'border-green-600 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <FileText className="w-6 h-6" />
+                    <span className="text-xs font-medium">PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliverableType('IMAGE')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
+                      deliverableType === 'IMAGE'
+                        ? 'border-green-600 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <Image className="w-6 h-6" />
+                    <span className="text-xs font-medium">Image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliverableType('LINK')}
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
+                      deliverableType === 'LINK'
+                        ? 'border-green-600 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <LinkIcon className="w-6 h-6" />
+                    <span className="text-xs font-medium">Link</span>
+                  </button>
+                </div>
+              </div>
+              
+              {/* File upload or URL input */}
+              {deliverableType && deliverableType !== 'LINK' && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Upload File
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition cursor-pointer">
+                    <input
+                      type="file"
+                      onChange={handleFileChange}
+                      accept={deliverableType === 'PDF' ? '.pdf' : 'image/*'}
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <label htmlFor="file-upload" className="cursor-pointer">
+                      {file ? (
+                        <div className="flex items-center justify-center gap-2 text-green-600">
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="font-medium">{file.name}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-600">
+                            Click to upload or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {deliverableType === 'PDF' ? 'PDF up to 10MB' : 'PNG, JPG up to 10MB'}
+                          </p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  {uploading && (
+                    <div className="mt-3">
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-green-600 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress}%</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {deliverableType === 'LINK' && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    External URL
+                  </label>
+                  <input
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+              )}
+              
+              {/* Error */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || uploading}
+                  className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Resubmitting...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4" />
+                      Resubmit
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -79,17 +489,17 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Resubmit modal state
+  const [resubmitApproval, setResubmitApproval] = useState<Approval | null>(null)
 
-  useEffect(() => {
+  const loadProject = useCallback(async () => {
     if (!projectId) {
       setError('No project ID provided')
       setLoading(false)
       return
     }
-    loadProject()
-  }, [projectId])
-
-  const loadProject = async () => {
+    
     setLoading(true)
     setError(null)
     try {
@@ -107,7 +517,11 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, api])
+
+  useEffect(() => {
+    loadProject()
+  }, [loadProject])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Not set'
@@ -142,7 +556,7 @@ export default function ProjectDetailPage() {
     switch (status) {
       case 'PENDING': return 'bg-amber-100 text-amber-800'
       case 'APPROVED': return 'bg-green-100 text-green-800'
-      case 'CHANGES_REQUESTED': return 'bg-red-100 text-red-800'
+      case 'CHANGES_REQUESTED': return 'bg-orange-100 text-orange-800'
       case 'EXPIRED': return 'bg-gray-100 text-gray-800'
       default: return 'bg-gray-100 text-gray-800'
     }
@@ -206,7 +620,6 @@ export default function ProjectDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Projects
           </button>
-
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -220,7 +633,6 @@ export default function ProjectDetailPage() {
                 <p className="text-gray-600 mt-2 max-w-2xl">{project.description}</p>
               )}
             </div>
-
             <button
               onClick={goToCreateApproval}
               className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
@@ -234,6 +646,7 @@ export default function ProjectDetailPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -278,6 +691,7 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
+          {/* Approvals list */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -346,9 +760,21 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 ml-4">
                           {approval.status === 'PENDING' && approval.token && (
                             <ApprovalLink token={approval.token} />
+                          )}
+                          
+                          {/* Resubmit button for CHANGES_REQUESTED */}
+                          {approval.status === 'CHANGES_REQUESTED' && (
+                            <button
+                              onClick={() => setResubmitApproval(approval)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 transition"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              Resubmit
+                            </button>
                           )}
                         </div>
                       </div>
@@ -360,6 +786,16 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Resubmit Modal */}
+      {resubmitApproval && projectId && (
+        <ResubmitModal
+          approval={resubmitApproval}
+          projectId={projectId}
+          onClose={() => setResubmitApproval(null)}
+          onSuccess={loadProject}
+        />
+      )}
     </div>
   )
 }
