@@ -101,8 +101,7 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
-  const [uploadedName, setUploadedName] = useState<string | null>(null)
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
