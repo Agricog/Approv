@@ -57,8 +57,8 @@ router.get(
       // Recent activity
       getRecentActivity(organizationId!, 10),
       
-      // Bottlenecks (approvals pending > 3 days)
-      getBottlenecks(organizationId!, 5)
+      // Bottlenecks (pending + changes requested)
+      getBottlenecks(organizationId!, 10)
     ])
     
     // Calculate trends (compare to previous period)
@@ -325,14 +325,35 @@ function extractStatus(state: any): string | undefined {
   return undefined
 }
 
+/**
+ * Get items needing attention:
+ * 1. CHANGES_REQUESTED - Client requested changes, architect needs to act (highest priority)
+ * 2. PENDING - Waiting for client response (sorted by days waiting)
+ */
 async function getBottlenecks(organizationId: string, limit: number) {
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
-  
-  const approvals = await prisma.approval.findMany({
+  // Get changes requested (needs architect action) - highest priority
+  const changesRequested = await prisma.approval.findMany({
+    where: {
+      project: { organizationId },
+      status: 'CHANGES_REQUESTED'
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: limit,
+    include: {
+      project: {
+        select: { id: true, name: true }
+      },
+      client: {
+        select: { firstName: true, lastName: true }
+      }
+    }
+  })
+
+  // Get pending approvals (waiting for client) - sorted by oldest first
+  const pendingApprovals = await prisma.approval.findMany({
     where: {
       project: { organizationId },
       status: 'PENDING',
-      createdAt: { lt: threeDaysAgo },
       expiresAt: { gt: new Date() }
     },
     orderBy: { createdAt: 'asc' },
@@ -346,8 +367,26 @@ async function getBottlenecks(organizationId: string, limit: number) {
       }
     }
   })
-  
-  return approvals.map(a => {
+
+  // Map changes requested items
+  const changesItems = changesRequested.map(a => {
+    const daysSinceResponse = Math.floor((Date.now() - a.updatedAt.getTime()) / (1000 * 60 * 60 * 24))
+    
+    return {
+      id: a.id,
+      projectId: a.project.id,
+      projectName: a.project.name,
+      stageLabel: a.stageLabel,
+      clientName: `${a.client.firstName} ${a.client.lastName}`,
+      daysPending: daysSinceResponse,
+      status: 'CHANGES_REQUESTED' as const,
+      urgency: 'critical' as const, // Changes requested always high priority
+      actionRequired: 'Revise and resubmit'
+    }
+  })
+
+  // Map pending items
+  const pendingItems = pendingApprovals.map(a => {
     const daysPending = Math.floor((Date.now() - a.createdAt.getTime()) / (1000 * 60 * 60 * 24))
     
     return {
@@ -357,9 +396,33 @@ async function getBottlenecks(organizationId: string, limit: number) {
       stageLabel: a.stageLabel,
       clientName: `${a.client.firstName} ${a.client.lastName}`,
       daysPending,
-      urgency: daysPending > 10 ? 'critical' : daysPending > 7 ? 'high' : daysPending > 5 ? 'medium' : 'low'
+      status: 'PENDING' as const,
+      urgency: daysPending > 10 ? 'critical' as const : 
+               daysPending > 7 ? 'high' as const : 
+               daysPending > 3 ? 'medium' as const : 'low' as const,
+      actionRequired: 'Awaiting client response'
     }
   })
+
+  // Combine and sort: changes requested first (critical), then by urgency/days
+  const combined = [...changesItems, ...pendingItems]
+  
+  // Sort by: status (CHANGES_REQUESTED first), then urgency, then days pending
+  combined.sort((a, b) => {
+    // Changes requested always comes first
+    if (a.status === 'CHANGES_REQUESTED' && b.status !== 'CHANGES_REQUESTED') return -1
+    if (b.status === 'CHANGES_REQUESTED' && a.status !== 'CHANGES_REQUESTED') return 1
+    
+    // Then by urgency
+    const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+    const urgencyDiff = urgencyOrder[a.urgency] - urgencyOrder[b.urgency]
+    if (urgencyDiff !== 0) return urgencyDiff
+    
+    // Then by days pending (descending)
+    return b.daysPending - a.daysPending
+  })
+
+  return combined.slice(0, limit)
 }
 
 function getDateRange(period: string): { startDate: Date; endDate: Date } {
