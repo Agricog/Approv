@@ -3,7 +3,7 @@
  * Shows project details and associated approvals
  * Includes resubmit functionality for changes requested
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, 
@@ -492,13 +492,7 @@ export default function ProjectDetailPage() {
   // Resubmit modal state
   const [resubmitApproval, setResubmitApproval] = useState<Approval | null>(null)
 
-  const loadProject = useCallback(async () => {
-    if (!projectId) {
-      setError('No project ID provided')
-      setLoading(false)
-      return
-    }
-    
+  const loadProject = async () => {
     setLoading(true)
     setError(null)
     try {
@@ -516,11 +510,17 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false)
     }
-  }, [projectId, api])
+  }
 
   useEffect(() => {
+    if (!projectId) {
+      setError('No project ID provided')
+      setLoading(false)
+      return
+    }
+    
     loadProject()
-  }, [loadProject])
+  }, [projectId])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Not set'
@@ -798,4 +798,3 @@ export default function ProjectDetailPage() {
     </div>
   )
 }
-
