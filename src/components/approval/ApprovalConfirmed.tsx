@@ -1,9 +1,10 @@
 /**
  * ApprovalConfirmed Component
  * Displayed when an approval has already been responded to
+ * Includes access to the approved deliverable
  */
 
-import { CheckCircle, MessageSquare, Calendar, ArrowRight } from 'lucide-react'
+import { CheckCircle, MessageSquare, Calendar, FileText, Image, ExternalLink, Download } from 'lucide-react'
 import { formatDateTime } from '../../utils/formatters'
 import type { ApprovalStatus } from '../../types'
 
@@ -16,6 +17,9 @@ export interface ApprovalConfirmedProps {
   approvalStage: string
   status: ApprovalStatus
   respondedAt: string | null
+  deliverableUrl?: string | null
+  deliverableName?: string | null
+  deliverableType?: string | null
 }
 
 // =============================================================================
@@ -26,10 +30,21 @@ export function ApprovalConfirmed({
   projectName,
   approvalStage,
   status,
-  respondedAt
+  respondedAt,
+  deliverableUrl,
+  deliverableName,
+  deliverableType
 }: ApprovalConfirmedProps) {
-  const isApproved = status === 'approved'
-  const isChangesRequested = status === 'changes_requested'
+  const isApproved = status === 'approved' || status === 'APPROVED'
+  const isChangesRequested = status === 'changes_requested' || status === 'CHANGES_REQUESTED'
+
+  // Determine icon for deliverable type
+  const getDeliverableIcon = () => {
+    const type = deliverableType?.toUpperCase()
+    if (type === 'PDF') return <FileText className="w-5 h-5" />
+    if (type === 'IMAGE') return <Image className="w-5 h-5" />
+    return <ExternalLink className="w-5 h-5" />
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -79,6 +94,34 @@ export function ApprovalConfirmed({
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Calendar size={16} />
                 <span>Responded on {formatDateTime(respondedAt)}</span>
+              </div>
+            )}
+
+            {/* Deliverable section */}
+            {deliverableUrl && (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                    {getDeliverableIcon()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 text-sm mb-1">
+                      {isApproved ? 'Approved Document' : 'Document Reviewed'}
+                    </p>
+                    <p className="text-sm text-gray-600 truncate mb-3">
+                      {deliverableName || 'Deliverable'}
+                    </p>
+                    <a
+                      href={deliverableUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+                    >
+                      <Download className="w-4 h-4" />
+                      View Document
+                    </a>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -134,61 +177,6 @@ export function ApprovalConfirmed({
           </a>
         </p>
       </div>
-    </div>
-  )
-}
-
-// =============================================================================
-// SUCCESS REDIRECT VARIANT
-// =============================================================================
-
-export interface ApprovalSuccessProps {
-  action: 'approved' | 'changes_requested'
-  projectName: string
-  onContinue?: () => void
-}
-
-export function ApprovalSuccess({
-  action,
-  projectName,
-  onContinue
-}: ApprovalSuccessProps) {
-  const isApproved = action === 'approved'
-
-  return (
-    <div className="text-center py-12 px-4">
-      <div 
-        className={`w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center ${
-          isApproved ? 'bg-green-100' : 'bg-amber-100'
-        }`}
-      >
-        {isApproved ? (
-          <CheckCircle className={`w-10 h-10 text-green-600`} />
-        ) : (
-          <MessageSquare className={`w-10 h-10 text-amber-600`} />
-        )}
-      </div>
-
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">
-        {isApproved ? 'Successfully Approved!' : 'Changes Requested'}
-      </h2>
-
-      <p className="text-gray-600 mb-6 max-w-sm mx-auto">
-        {isApproved 
-          ? `Your approval for ${projectName} has been recorded.`
-          : `Your feedback for ${projectName} has been submitted.`
-        }
-      </p>
-
-      {onContinue && (
-        <button
-          onClick={onContinue}
-          className="inline-flex items-center gap-2 text-green-600 hover:text-green-700 font-medium"
-        >
-          <span>View all projects</span>
-          <ArrowRight size={18} />
-        </button>
-      )}
     </div>
   )
 }
