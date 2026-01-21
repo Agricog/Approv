@@ -35,8 +35,8 @@ export function ApprovalConfirmed({
   deliverableName,
   deliverableType
 }: ApprovalConfirmedProps) {
-  const isApproved = status === 'approved' || status === 'APPROVED'
-  const isChangesRequested = status === 'changes_requested' || status === 'CHANGES_REQUESTED'
+  const isApproved = status.toLowerCase() === 'approved'
+  const isChangesRequested = status.toLowerCase() === 'changes_requested'
 
   // Determine icon for deliverable type
   const getDeliverableIcon = () => {
