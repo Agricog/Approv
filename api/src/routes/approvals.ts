@@ -660,13 +660,21 @@ router.post(
       ip: getClientIp(req)
     }, 'Approval response submitted')
     
-    // Send confirmation email to client
+    // Resolve deliverable URL for the confirmation email
+    const resolvedDeliverableUrl = await resolveDeliverableUrl(approval.deliverableUrl)
+    
+    // Send confirmation email to client with all details
     sendApprovalConfirmation({
       to: approval.client.email,
       clientName: approval.client.firstName,
       projectName: approval.project.name,
       stageName: approval.stageLabel,
-      approvedAt: new Date()
+      approvedAt: new Date(),
+      approvalToken: token,
+      deliverableUrl: resolvedDeliverableUrl,
+      deliverableName: approval.deliverableName,
+      action: action === 'approve' ? 'approved' : 'changes_requested',
+      organizationName: approval.project.organization?.name || 'Your architect'
     }).catch(err => logger.error({ err }, 'Failed to send confirmation email'))
     
     // Get team emails and notify
