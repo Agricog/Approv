@@ -24,7 +24,7 @@ function getResend() {
   return resend
 }
 const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@approv.co.uk'
-const APP_URL = process.env.APP_URL || 'https://approv-production.up.railway.app'
+const APP_URL = process.env.APP_URL || 'https://approv.co.uk'
 
 // =============================================================================
 // EMAIL TEMPLATES
@@ -45,6 +45,11 @@ interface ApprovalConfirmationEmail {
   projectName: string
   stageName: string
   approvedAt: Date
+  approvalToken: string
+  deliverableUrl?: string | null
+  deliverableName?: string | null
+  action: 'approved' | 'changes_requested'
+  organizationName: string
 }
 
 interface ReminderEmail {
@@ -68,9 +73,9 @@ export async function sendApprovalRequest(data: ApprovalRequestEmail): Promise<b
   
   try {
     const client = getResend()
-if (!client) return false
+    if (!client) return false
 
-const { error } = await client.emails.send({
+    const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `Approval Required: ${data.projectName} - ${data.stageName}`,
@@ -128,16 +133,34 @@ const { error } = await client.emails.send({
 
 /**
  * Send approval confirmation email to client
+ * Includes link back to approval page and deliverable access
  */
 export async function sendApprovalConfirmation(data: ApprovalConfirmationEmail): Promise<boolean> {
+  const approvalUrl = `${APP_URL}/approve/${data.approvalToken}`
+  const isApproved = data.action === 'approved'
+  
   try {
     const client = getResend()
-if (!client) return false
+    if (!client) return false
 
-const { error } = await client.emails.send({
+    // Build deliverable section if available
+    let deliverableSection = ''
+    if (data.deliverableUrl && data.deliverableName) {
+      deliverableSection = `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">📄 ${isApproved ? 'Approved Document' : 'Document Reviewed'}</p>
+          <p style="margin: 0 0 12px 0; color: #6b7280;">${data.deliverableName}</p>
+          <a href="${approvalUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 14px;">
+            View Document
+          </a>
+        </div>
+      `
+    }
+
+    const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
-      subject: `Approved: ${data.projectName} - ${data.stageName}`,
+      subject: `${isApproved ? 'Approved' : 'Changes Requested'}: ${data.projectName} - ${data.stageName}`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -147,19 +170,26 @@ const { error } = await client.emails.send({
         </head>
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="text-align: center; margin-bottom: 30px;">
-            <div style="width: 50px; height: 50px; background: #16a34a; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;">
-              <span style="color: white; font-size: 24px;">✓</span>
+            <div style="width: 50px; height: 50px; background: ${isApproved ? '#16a34a' : '#f59e0b'}; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;">
+              <span style="color: white; font-size: 24px;">${isApproved ? '✓' : '📝'}</span>
             </div>
           </div>
           
-          <h1 style="font-size: 24px; margin-bottom: 20px; color: #16a34a;">Approval Confirmed</h1>
+          <h1 style="font-size: 24px; margin-bottom: 20px; color: ${isApproved ? '#16a34a' : '#f59e0b'};">
+            ${isApproved ? 'Approval Confirmed' : 'Changes Requested'}
+          </h1>
           
           <p>Hi ${data.clientName},</p>
           
-          <p>Thank you for approving <strong>${data.stageName}</strong> for <strong>${data.projectName}</strong>.</p>
+          <p>${isApproved 
+            ? `Thank you for approving <strong>${data.stageName}</strong> for <strong>${data.projectName}</strong>.`
+            : `Your feedback for <strong>${data.stageName}</strong> on <strong>${data.projectName}</strong> has been submitted.`
+          }</p>
           
-          <div style="background: #f0fdf4; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 0; font-size: 14px;"><strong>Approved:</strong> ${data.approvedAt.toLocaleDateString('en-GB', { 
+          <div style="background: ${isApproved ? '#f0fdf4' : '#fef3c7'}; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Project:</strong> ${data.projectName}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Stage:</strong> ${data.stageName}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>${isApproved ? 'Approved' : 'Responded'}:</strong> ${data.approvedAt.toLocaleDateString('en-GB', { 
               weekday: 'long',
               year: 'numeric',
               month: 'long',
@@ -169,12 +199,27 @@ const { error } = await client.emails.send({
             })}</p>
           </div>
           
-          <p>The project team has been notified and will proceed with the next steps.</p>
+          ${deliverableSection}
+          
+          <p>${isApproved 
+            ? `${data.organizationName} has been notified and will proceed with the next steps.`
+            : `${data.organizationName} has been notified and will address your feedback.`
+          }</p>
+          
+          <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 24px 0;">
+            <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">🔗 Your Records</p>
+            <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 14px;">
+              You can revisit this approval at any time using the link below:
+            </p>
+            <a href="${approvalUrl}" style="color: #3b82f6; font-size: 14px; word-break: break-all;">
+              ${approvalUrl}
+            </a>
+          </div>
           
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
           
           <p style="color: #999; font-size: 12px;">
-            This is an automated confirmation from Approv.<br>
+            This is an automated confirmation from Approv on behalf of ${data.organizationName}.<br>
             Please keep this email for your records.
           </p>
         </body>
@@ -187,7 +232,7 @@ const { error } = await client.emails.send({
       return false
     }
 
-    logger.info({ to: data.to, project: data.projectName }, 'Approval confirmation email sent')
+    logger.info({ to: data.to, project: data.projectName, action: data.action }, 'Approval confirmation email sent')
     return true
   } catch (err) {
     logger.error({ err, to: data.to }, 'Error sending confirmation email')
@@ -204,9 +249,9 @@ export async function sendApprovalReminder(data: ReminderEmail): Promise<boolean
   
   try {
     const client = getResend()
-if (!client) return false
+    if (!client) return false
 
-const { error } = await client.emails.send({
+    const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `${isUrgent ? '⚠️ ' : ''}Reminder: Approval pending for ${data.projectName}`,
@@ -281,9 +326,9 @@ export async function sendTeamNotification(data: {
   
   try {
     const client = getResend()
-if (!client) return false
+    if (!client) return false
 
-const { error } = await client.emails.send({
+    const { error } = await client.emails.send({
       from: `Approv <${FROM_EMAIL}>`,
       to: data.to,
       subject: `${isApproved ? '✅' : '📝'} ${data.clientName} ${isApproved ? 'approved' : 'requested changes'}: ${data.projectName}`,
