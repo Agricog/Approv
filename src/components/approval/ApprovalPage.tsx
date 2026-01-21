@@ -76,7 +76,7 @@ export function ApprovalPage() {
     )
   }
 
-  // Already responded state
+  // Already responded state - now includes deliverable access
   if (isAlreadyResponded) {
     return (
       <>
@@ -89,6 +89,9 @@ export function ApprovalPage() {
           approvalStage={approval.approvalStage}
           status={approval.status}
           respondedAt={approval.respondedAt}
+          deliverableUrl={approval.deliverableUrl}
+          deliverableName={approval.deliverableName}
+          deliverableType={approval.deliverableType}
         />
       </>
     )
