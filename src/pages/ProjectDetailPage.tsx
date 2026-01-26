@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
+import { useAuth } from '@clerk/clerk-react'
 
 interface Client {
   id: string
@@ -691,6 +692,7 @@ export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const api = useApi<Project>()
+  const { getToken } = useAuth()
   
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -913,10 +915,13 @@ export default function ProjectDetailPage() {
               <button
                 onClick={async () => {
                   try {
+                    const token = await getToken()
                     const apiUrl = import.meta.env.VITE_API_URL || ''
                     const response = await fetch(apiUrl + '/api/projects/' + project.id + '/report', {
                       method: 'GET',
-                      credentials: 'include'
+                      headers: {
+                        'Authorization': 'Bearer ' + token
+                      }
                     })
                     
                     if (!response.ok) {
