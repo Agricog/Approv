@@ -4,7 +4,7 @@
  * Includes access to the approved deliverable
  */
 
-import { CheckCircle, MessageSquare, Calendar, FileText, Image, ExternalLink, Download } from 'lucide-react'
+import { CheckCircle, MessageSquare, Calendar, FileText, Image, ExternalLink, Eye } from 'lucide-react'
 import { formatDateTime } from '../../utils/formatters'
 import type { ApprovalStatus } from '../../types'
 
@@ -117,8 +117,8 @@ export function ApprovalConfirmed({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
                     >
-                      <Download className="w-4 h-4" />
-                      View Document
+                      <Eye className="w-4 h-4" />
+                      View Plans
                     </a>
                   </div>
                 </div>
@@ -153,14 +153,6 @@ export function ApprovalConfirmed({
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
-              This approval has been recorded and cannot be changed. 
-              If you need to make amendments, please contact the project team directly.
-            </p>
           </div>
         </div>
 
