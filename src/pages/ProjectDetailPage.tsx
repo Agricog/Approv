@@ -908,16 +908,39 @@ export default function ProjectDetailPage() {
                 Project Report
               </h2>
               <p className="text-sm text-gray-600 mb-4">
-                Download a complete PDF report of all approvals, client feedback, and audit history for this project.
+                Download a complete PDF report of all approvals, client feedback, and history for this project.
               </p>
-              <a
-                href={`/api/projects/${project.id}/report`}
-                download
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(`/api/projects/${project.id}/report`, {
+                      method: 'GET',
+                      credentials: 'include'
+                    })
+                    
+                    if (!response.ok) {
+                      throw new Error('Failed to generate report')
+                    }
+                    
+                    const blob = await response.blob()
+                    const url = window.URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `${project.reference}-report.pdf`
+                    document.body.appendChild(a)
+                    a.click()
+                    window.URL.revokeObjectURL(url)
+                    document.body.removeChild(a)
+                  } catch (err) {
+                    console.error('Report download failed:', err)
+                    alert('Failed to download report. Please try again.')
+                  }
+                }}
                 className="inline-flex items-center gap-2 w-full justify-center bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition font-medium text-sm border border-gray-300"
               >
                 <Download className="w-4 h-4" />
                 Download Report (PDF)
-              </a>
+              </button>
               <p className="text-xs text-gray-500 mt-2 text-center">
                 Useful for records or dispute resolution
               </p>
