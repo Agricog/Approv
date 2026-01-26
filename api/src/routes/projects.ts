@@ -2,7 +2,7 @@
  * Project Routes
  * Project management endpoints (authenticated)
  */
-import { Router, Response } from 'express'
+import { Router } from 'express'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const PDFDocument = require('pdfkit')
@@ -256,56 +256,57 @@ router.get(
 router.get(
   '/:id/report',
   requireProjectAccess,
-  asyncHandler(async (req, res) => {
-    const { id } = req.params
-    const { organizationId, user } = req
-    
-    // Get full project data with all approvals
-    const project = await prisma.project.findFirst({
-      where: { id, organizationId },
-      include: {
-        client: true,
-        organization: {
-          select: {
-            name: true
-          }
-        },
-        approvals: {
-          orderBy: { createdAt: 'asc' },
-          include: {
-            sentBy: {
-              select: {
-                firstName: true,
-                lastName: true
+  async (req: any, res: any) => {
+    try {
+      const { id } = req.params
+      const { organizationId, user } = req
+      
+      // Get full project data with all approvals
+      const project = await prisma.project.findFirst({
+        where: { id, organizationId },
+        include: {
+          client: true,
+          organization: {
+            select: {
+              name: true
+            }
+          },
+          approvals: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              sentBy: {
+                select: {
+                  firstName: true,
+                  lastName: true
+                }
               }
             }
           }
         }
+      })
+      
+      if (!project) {
+        return res.status(404).json({ success: false, error: 'Project not found' })
       }
-    })
-    
-    if (!project) {
-      throw new NotFoundError('Project')
-    }
-    
-    // Log report generation
-    logAudit({
-      action: 'project.report_generated',
-      entityType: 'project',
-      entityId: id,
-      userId: user!.id,
-      organizationId: organizationId!,
-      ipAddress: getClientIp(req),
-      metadata: {
+      
+      // Log report generation
+      logAudit({
+        action: 'project.report_generated',
+        entityType: 'project',
+        entityId: id,
+        userId: user?.id,
+        organizationId: organizationId,
+        ipAddress: getClientIp(req),
+        metadata: {
+          approvalsCount: project.approvals.length
+        }
+      })
+      
+      logger.info({
+        projectId: id,
+        userId: user?.id,
         approvalsCount: project.approvals.length
-      }
-    })
-    
-    logger.info({
-      projectId: id,
-      userId: user!.id,
-      approvalsCount: project.approvals.length
-    }, 'Project report generated')
+      }, 'Project report generated')
     
     // Helper function to format dates
     const formatDate = (date: Date | string | null): string => {
@@ -328,85 +329,74 @@ router.get(
       })
     }
     
-    // Set response headers
-    const filename = `${project.reference}-report-${new Date().toISOString().split('T')[0]}.pdf`
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    // Create PDF and collect into buffer
+    const chunks: Buffer[] = []
     
-    // Create PDF and wrap in promise
     await new Promise<void>((resolve, reject) => {
       try {
         const doc = new PDFDocument({ 
           size: 'A4',
           margin: 50,
-          bufferPages: true
+          autoFirstPage: true
         })
         
-        // Handle stream events
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk))
         doc.on('end', () => resolve())
         doc.on('error', (err: Error) => reject(err))
-        
-        // Pipe to response
-        doc.pipe(res)
         
         // =========================================================================
         // HEADER
         // =========================================================================
         
         doc.fontSize(22).text('PROJECT APPROVAL REPORT', { align: 'center' })
-        doc.moveDown(0.3)
-        doc.fontSize(10).text(`Generated: ${formatDate(new Date())}`, { align: 'center' })
-        doc.fontSize(9).text(`Report ID: RPT-${Date.now().toString(36).toUpperCase()}`, { align: 'center' })
-        doc.moveDown(1.5)
+        doc.moveDown(0.5)
+        doc.fontSize(10).text('Generated: ' + formatDate(new Date()), { align: 'center' })
+        doc.fontSize(9).text('Report ID: RPT-' + Date.now().toString(36).toUpperCase(), { align: 'center' })
+        doc.moveDown(2)
         
         // =========================================================================
         // PROJECT DETAILS
         // =========================================================================
         
         doc.fontSize(14).text('PROJECT DETAILS')
-        doc.moveDown(0.3)
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.fontSize(10).text('─'.repeat(60))
         doc.moveDown(0.5)
         
-        doc.fontSize(10)
-        doc.text(`Project Name: ${project.name}`)
-        doc.text(`Reference: ${project.reference}`)
-        doc.text(`Status: ${project.status}`)
-        doc.text(`Current Stage: ${project.currentStage || 'Not set'}`)
-        doc.text(`Start Date: ${formatShortDate(project.startDate)}`)
-        doc.text(`Target Completion: ${formatShortDate(project.targetCompletionDate)}`)
+        doc.text('Project Name: ' + project.name)
+        doc.text('Reference: ' + project.reference)
+        doc.text('Status: ' + project.status)
+        doc.text('Current Stage: ' + (project.currentStage || 'Not set'))
+        doc.text('Start Date: ' + formatShortDate(project.startDate))
+        doc.text('Target Completion: ' + formatShortDate(project.targetCompletionDate))
         if (project.address) {
-          doc.text(`Address: ${project.address}`)
+          doc.text('Address: ' + project.address)
         }
-        doc.moveDown(1)
+        doc.moveDown(1.5)
         
         // =========================================================================
         // CLIENT DETAILS
         // =========================================================================
         
         doc.fontSize(14).text('CLIENT INFORMATION')
-        doc.moveDown(0.3)
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.fontSize(10).text('─'.repeat(60))
         doc.moveDown(0.5)
         
-        doc.fontSize(10)
-        doc.text(`Name: ${project.client.firstName} ${project.client.lastName}`)
-        doc.text(`Email: ${project.client.email}`)
+        doc.text('Name: ' + project.client.firstName + ' ' + project.client.lastName)
+        doc.text('Email: ' + project.client.email)
         if (project.client.company) {
-          doc.text(`Company: ${project.client.company}`)
+          doc.text('Company: ' + project.client.company)
         }
         if (project.client.phone) {
-          doc.text(`Phone: ${project.client.phone}`)
+          doc.text('Phone: ' + project.client.phone)
         }
-        doc.moveDown(1)
+        doc.moveDown(1.5)
         
         // =========================================================================
         // APPROVAL SUMMARY
         // =========================================================================
         
         doc.fontSize(14).text('APPROVAL SUMMARY')
-        doc.moveDown(0.3)
-        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.fontSize(10).text('─'.repeat(60))
         doc.moveDown(0.5)
         
         const totalApprovals = project.approvals.length
@@ -415,20 +405,12 @@ router.get(
         const pending = project.approvals.filter(a => a.status === 'PENDING').length
         const expired = project.approvals.filter(a => a.status === 'EXPIRED').length
         
-        const responseTimes = project.approvals
-          .filter(a => a.responseTimeHours)
-          .map(a => a.responseTimeHours!)
-        const avgResponseTime = responseTimes.length > 0
-          ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1)
-          : 'N/A'
-        
         doc.fontSize(10)
-        doc.text(`Total Approvals: ${totalApprovals}`)
-        doc.text(`Approved: ${approved}`)
-        doc.text(`Changes Requested: ${changesRequested}`)
-        doc.text(`Pending: ${pending}`)
-        doc.text(`Expired: ${expired}`)
-        doc.text(`Average Response Time: ${avgResponseTime === 'N/A' ? avgResponseTime : avgResponseTime + ' hours'}`)
+        doc.text('Total Approvals: ' + totalApprovals)
+        doc.text('Approved: ' + approved)
+        doc.text('Changes Requested: ' + changesRequested)
+        doc.text('Pending: ' + pending)
+        doc.text('Expired: ' + expired)
         doc.moveDown(1)
         
         // =========================================================================
@@ -448,30 +430,34 @@ router.get(
               doc.addPage()
             }
             
-            doc.fontSize(11).text(`${index + 1}. ${approval.stageLabel}`)
+            doc.fontSize(11).text((index + 1) + '. ' + approval.stageLabel)
             doc.moveDown(0.2)
             
             doc.fontSize(9)
-            doc.text(`   Status: ${approval.status.replace('_', ' ')}`)
-            doc.text(`   Sent: ${formatDate(approval.createdAt)}`)
+            doc.text('   Status: ' + approval.status.replace('_', ' '))
+            doc.text('   Sent: ' + formatDate(approval.createdAt))
+            
             if (approval.sentBy) {
-              doc.text(`   Sent by: ${approval.sentBy.firstName} ${approval.sentBy.lastName}`)
+              doc.text('   Sent by: ' + approval.sentBy.firstName + ' ' + approval.sentBy.lastName)
             }
-            doc.text(`   Expires: ${formatDate(approval.expiresAt)}`)
+            
+            if (approval.expiresAt) {
+              doc.text('   Expires: ' + formatDate(approval.expiresAt))
+            }
             
             if (approval.respondedAt) {
-              doc.text(`   Responded: ${formatDate(approval.respondedAt)}`)
+              doc.text('   Responded: ' + formatDate(approval.respondedAt))
             }
             
             if (approval.responseTimeHours) {
-              doc.text(`   Response Time: ${approval.responseTimeHours.toFixed(1)} hours`)
+              doc.text('   Response Time: ' + approval.responseTimeHours.toFixed(1) + ' hours')
             }
             
-            doc.text(`   Views: ${approval.viewCount || 0} | Reminders: ${approval.reminderCount || 0}`)
+            doc.text('   Views: ' + (approval.viewCount || 0) + ' | Reminders: ' + (approval.reminderCount || 0))
             
             if (approval.responseNotes) {
               doc.moveDown(0.2)
-              doc.fontSize(9).text(`   Client Feedback: "${approval.responseNotes}"`)
+              doc.fontSize(9).text('   Client Feedback: "' + approval.responseNotes + '"')
             }
             
             doc.moveDown(0.5)
@@ -490,9 +476,9 @@ router.get(
         doc.moveDown(0.5)
         
         doc.fontSize(10)
-        doc.text('This report contains a complete record of all approval requests and client responses for the above project. All timestamps are recorded and converted to local time for display.')
+        doc.text('This report contains a complete record of all approval requests and client responses for the above project.')
         doc.moveDown(0.5)
-        doc.text('This document may be used as evidence of client approvals and feedback in the event of any disputes regarding project scope, changes, or sign-offs.')
+        doc.text('This document may be used as evidence of client approvals and feedback in the event of any disputes.')
         doc.moveDown(2)
         
         doc.text('_________________________________')
@@ -504,13 +490,28 @@ router.get(
         
         doc.fontSize(8).text('Generated by Approv - https://approv.co.uk', { align: 'center' })
         
-        // Finalize PDF - this triggers the 'end' event
+        // End document
         doc.end()
       } catch (err) {
         reject(err)
       }
     })
-  })
+    
+    // Combine chunks into single buffer
+    const pdfBuffer = Buffer.concat(chunks)
+    
+    // Send response
+    const filename = project.reference + '-report-' + new Date().toISOString().split('T')[0] + '.pdf'
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Length', pdfBuffer.length)
+    res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"')
+    return res.send(pdfBuffer)
+    
+    } catch (error) {
+      logger.error({ error }, 'Failed to generate PDF report')
+      return res.status(500).json({ success: false, error: 'Failed to generate report' })
+    }
+  }
 )
 // =============================================================================
 // CREATE & UPDATE
