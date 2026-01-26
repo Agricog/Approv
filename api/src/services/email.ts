@@ -39,6 +39,17 @@ interface ApprovalRequestEmail {
   organizationName: string
 }
 
+interface ApprovalResubmitEmail {
+  to: string
+  clientName: string
+  projectName: string
+  stageName: string
+  approvalToken: string
+  organizationName: string
+  customMessage?: string
+  previousFeedback?: string
+}
+
 interface ApprovalConfirmationEmail {
   to: string
   clientName: string
@@ -127,6 +138,116 @@ export async function sendApprovalRequest(data: ApprovalRequestEmail): Promise<b
     return true
   } catch (err) {
     logger.error({ err, to: data.to }, 'Error sending approval request email')
+    return false
+  }
+}
+
+/**
+ * Send REVISED VERSION approval email to client
+ * Used when resubmitting after changes were requested
+ * Clearly marked as an updated version incorporating feedback
+ */
+export async function sendApprovalResubmit(data: ApprovalResubmitEmail): Promise<boolean> {
+  const approvalUrl = `${APP_URL}/approve/${data.approvalToken}`
+  
+  try {
+    const client = getResend()
+    if (!client) return false
+
+    // Build custom message section if provided
+    let customMessageSection = ''
+    if (data.customMessage) {
+      customMessageSection = `
+        <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0; font-weight: 600; color: #166534;">Message from ${data.organizationName}:</p>
+          <p style="margin: 0; color: #374151;">${data.customMessage}</p>
+        </div>
+      `
+    }
+
+    // Build previous feedback reference if available
+    let previousFeedbackSection = ''
+    if (data.previousFeedback) {
+      previousFeedbackSection = `
+        <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0; font-weight: 600; color: #92400e;">📝 Your Previous Feedback:</p>
+          <p style="margin: 0; color: #78350f; font-style: italic;">"${data.previousFeedback}"</p>
+        </div>
+      `
+    }
+
+    const { error } = await client.emails.send({
+      from: `Approv <${FROM_EMAIL}>`,
+      to: data.to,
+      subject: `📋 REVISED: ${data.projectName} - ${data.stageName} (Updated Version)`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          
+          <!-- REVISED VERSION BANNER -->
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 16px 24px; border-radius: 12px; margin-bottom: 24px; text-align: center;">
+            <p style="margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9;">Updated Plans</p>
+            <p style="margin: 4px 0 0 0; font-size: 20px; font-weight: 700;">REVISED VERSION</p>
+          </div>
+          
+          <div style="text-align: center; margin-bottom: 30px;">
+            <div style="width: 50px; height: 50px; background: #3b82f6; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;">
+              <span style="color: white; font-size: 24px;">🔄</span>
+            </div>
+          </div>
+          
+          <h1 style="font-size: 24px; margin-bottom: 20px;">Updated Plans Ready for Review</h1>
+          
+          <p>Hi ${data.clientName},</p>
+          
+          <p><strong>${data.organizationName}</strong> has updated <strong>${data.stageName}</strong> for <strong>${data.projectName}</strong> based on your previous feedback.</p>
+          
+          <p>This is a <strong>revised version</strong> of the plans, incorporating your requested changes. Please review and let us know if the updates meet your requirements.</p>
+          
+          ${previousFeedbackSection}
+          
+          ${customMessageSection}
+          
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${approvalUrl}" style="display: inline-block; background: #3b82f6; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+              Review Updated Plans
+            </a>
+          </div>
+          
+          <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; color: #1e40af; font-size: 14px;">
+              <strong>What's next?</strong><br>
+              Review the updated plans and either approve them or request further changes if needed.
+            </p>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">This link is unique to you and does not require a login.</p>
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          
+          <p style="color: #999; font-size: 12px;">
+            This email was sent by Approv on behalf of ${data.organizationName}.<br>
+            If you have questions about these updates, please contact them directly.
+          </p>
+        </body>
+        </html>
+      `
+    })
+
+    if (error) {
+      logger.error({ error, to: data.to }, 'Failed to send resubmit approval email')
+      return false
+    }
+
+    logger.info({ to: data.to, project: data.projectName, hasCustomMessage: !!data.customMessage }, 'Resubmit approval email sent')
+    return true
+  } catch (err) {
+    logger.error({ err, to: data.to }, 'Error sending resubmit approval email')
     return false
   }
 }
@@ -378,6 +499,7 @@ export async function sendTeamNotification(data: {
 
 export default {
   sendApprovalRequest,
+  sendApprovalResubmit,
   sendApprovalConfirmation,
   sendApprovalReminder,
   sendTeamNotification
