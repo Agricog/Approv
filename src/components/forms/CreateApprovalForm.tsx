@@ -125,6 +125,15 @@ export default function CreateApprovalForm({
   const [showCustomStage, setShowCustomStage] = useState(false)
   const [useFileUpload, setUseFileUpload] = useState(true)
 
+  // Check if a deliverable is attached (file uploaded OR external URL provided)
+  const hasDeliverable = useCallback(() => {
+    // File uploaded to R2
+    if (uploadState.uploadedKey) return true
+    // External URL provided (for link type)
+    if (state.data.deliverableType === 'link' && state.data.deliverableUrl && state.data.deliverableUrl.trim().length > 0) return true
+    return false
+  }, [uploadState.uploadedKey, state.data.deliverableType, state.data.deliverableUrl])
+
   // Handle stage selection
   const handleStageChange = useCallback((value: string) => {
     const selectedStage = APPROVAL_STAGES.find(s => s.value === value)
@@ -166,7 +175,8 @@ export default function CreateApprovalForm({
       },
       errors: {
         ...prev.errors,
-        [field]: ''
+        [field]: '',
+        deliverable: '' // Clear deliverable error when user makes changes
       },
       submitError: null
     }))
@@ -207,6 +217,15 @@ export default function CreateApprovalForm({
       uploadedKey: null,
       uploadedUrl: null
     })
+
+    // Clear deliverable error since user is uploading
+    setState(prev => ({
+      ...prev,
+      errors: {
+        ...prev.errors,
+        deliverable: ''
+      }
+    }))
 
     try {
       // Get presigned URL
@@ -322,6 +341,19 @@ export default function CreateApprovalForm({
       return
     }
 
+    // **CRITICAL: Require deliverable attachment**
+    if (!hasDeliverable()) {
+      setState(prev => ({
+        ...prev,
+        errors: {
+          ...prev.errors,
+          deliverable: 'Please attach a document (PDF, image, or link) before sending the approval request'
+        },
+        submitError: 'An attachment is required. Please upload a file or provide an external link.'
+      }))
+      return
+    }
+
     setState(prev => ({ ...prev, isSubmitting: true, submitError: null }))
 
     try {
@@ -392,7 +424,7 @@ export default function CreateApprovalForm({
         submitError: err instanceof Error ? err.message : 'Failed to create approval. Please try again.'
       }))
     }
-  }, [state.data, uploadState, api, projectId, onSuccess, showCustomStage])
+  }, [state.data, uploadState, api, projectId, onSuccess, showCustomStage, hasDeliverable])
 
   // Success state
   if (state.isSuccess && state.createdApproval) {
@@ -572,11 +604,14 @@ export default function CreateApprovalForm({
         </>
       )}
 
-      {/* Deliverable Type */}
+      {/* Deliverable Type - Now Required */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Deliverable Type (Optional)
+          Deliverable Type <span className="text-red-500">*</span>
         </label>
+        <p className="text-xs text-gray-500 mb-3">
+          You must attach a document for the client to review
+        </p>
         <div className="grid grid-cols-3 gap-3">
           {DELIVERABLE_TYPES.map(type => {
             const Icon = type.icon
@@ -606,6 +641,12 @@ export default function CreateApprovalForm({
             )
           })}
         </div>
+        {state.errors.deliverable && (
+          <p className="text-sm text-red-600 mt-2 flex items-center gap-1" role="alert">
+            <AlertCircle className="w-4 h-4" />
+            {state.errors.deliverable}
+          </p>
+        )}
       </div>
 
       {/* File Upload or URL Input */}
@@ -615,7 +656,7 @@ export default function CreateApprovalForm({
             /* File Upload Section */
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Upload File
+                Upload File <span className="text-red-500">*</span>
               </label>
               
               {uploadState.uploadedKey ? (
@@ -665,7 +706,7 @@ export default function CreateApprovalForm({
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   className={'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition ' + (
-                    uploadState.error ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
+                    uploadState.error || state.errors.deliverable ? 'border-red-300 bg-red-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50'
                   )}
                 >
                   <input
@@ -706,7 +747,7 @@ export default function CreateApprovalForm({
             <>
               <div>
                 <label htmlFor="deliverableUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                  Deliverable URL
+                  Deliverable URL <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="url"
@@ -716,7 +757,7 @@ export default function CreateApprovalForm({
                   placeholder="https://example.com/document.pdf"
                   maxLength={500}
                   className={'w-full px-4 py-2 rounded-lg border ' + (
-                    state.errors.deliverableUrl ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                    state.errors.deliverableUrl || state.errors.deliverable ? 'border-red-300 bg-red-50' : 'border-gray-300'
                   ) + ' focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'}
                 />
                 {state.errors.deliverableUrl && (
