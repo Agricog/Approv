@@ -25,7 +25,8 @@ import {
   sendApprovalConfirmation, 
   sendTeamNotification,
   sendApprovalReminder,
-  sendApprovalRequest
+  sendApprovalRequest,
+  sendApprovalResubmit
 } from '../services/email.js'
 import { getSignedDownloadUrl, isStorageConfigured } from '../services/storage.js'
 
@@ -252,7 +253,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const { id } = req.params
     const { organizationId, user } = req
-    const { deliverableUrl, deliverableName, deliverableType, expiryDays = 14 } = req.body
+    const { 
+      deliverableUrl, 
+      deliverableName, 
+      deliverableType, 
+      expiryDays = 14,
+      customMessage  // NEW: Optional message from architect to client
+    } = req.body
 
     // Find the approval
     const approval = await prisma.approval.findFirst({
@@ -326,7 +333,8 @@ router.post(
         projectId: approval.projectId,
         stage: approval.stage,
         previousFeedback: previousState.responseNotes,
-        hasNewDeliverable: !!deliverableUrl
+        hasNewDeliverable: !!deliverableUrl,
+        hasCustomMessage: !!customMessage
       },
       previousState,
       newState: {
@@ -340,17 +348,20 @@ router.post(
       approvalId: id,
       projectId: approval.projectId,
       stage: approval.stage,
-      hasNewDeliverable: !!deliverableUrl
+      hasNewDeliverable: !!deliverableUrl,
+      hasCustomMessage: !!customMessage
     }, 'Approval resubmitted')
 
-    // Send new approval request email to client
-    sendApprovalRequest({
+    // Send REVISED VERSION email to client (different from original request)
+    sendApprovalResubmit({
       to: approval.client.email,
       clientName: approval.client.firstName,
       projectName: approval.project.name,
-      stageName: `${approval.stageLabel} (Revised)`,
+      stageName: approval.stageLabel,
       approvalToken: approval.token,
-      organizationName: approval.project.organization?.name || 'Your architect'
+      organizationName: approval.project.organization?.name || 'Your architect',
+      customMessage: customMessage || undefined,
+      previousFeedback: previousState.responseNotes || undefined
     }).catch(err => logger.error({ err }, 'Failed to send resubmit approval email'))
 
     res.json({
