@@ -94,33 +94,42 @@ interface StageProgressGraphProps {
   approvals: Approval[]
 }
 
-// RIBA Stage definitions
-const RIBA_STAGES = [
-  { id: '0', label: 'Stage 0', name: 'Strategic Definition' },
-  { id: '1', label: 'Stage 1', name: 'Preparation & Briefing' },
-  { id: '2', label: 'Stage 2', name: 'Concept Design' },
-  { id: '3', label: 'Stage 3', name: 'Spatial Coordination' },
-  { id: '4', label: 'Stage 4', name: 'Technical Design' },
-  { id: '5', label: 'Stage 5', name: 'Manufacturing & Construction' },
-  { id: '6', label: 'Stage 6', name: 'Handover' },
-  { id: '7', label: 'Stage 7', name: 'Use' },
+// Approv Stage definitions (matching the dropdown options)
+const APPROV_STAGES = [
+  { id: 'initial_concept', label: 'Initial Concept Drawings' },
+  { id: 'detailed_design', label: 'Detailed Design' },
+  { id: 'planning_pack', label: 'Planning Pack' },
+  { id: 'final_approval', label: 'Final Approval' },
 ]
 
 function StageProgressGraph({ approvals }: StageProgressGraphProps) {
-  // Group approvals by stage
+  // Group approvals by stageLabel (the human-readable name)
   const stageMap = new Map<string, Approval[]>()
   
   approvals.forEach(approval => {
-    const stage = approval.stage
-    if (!stageMap.has(stage)) {
-      stageMap.set(stage, [])
+    const stageLabel = approval.stageLabel
+    if (!stageMap.has(stageLabel)) {
+      stageMap.set(stageLabel, [])
     }
-    stageMap.get(stage)!.push(approval)
+    stageMap.get(stageLabel)!.push(approval)
   })
 
+  // Get unique stages that have been used, in order they appear in APPROV_STAGES
+  const usedStageLabels = new Set(approvals.map(a => a.stageLabel))
+  
+  // Build display stages: show stages that have approvals, maintaining logical order
+  const displayStages = APPROV_STAGES.filter(stage => 
+    usedStageLabels.has(stage.label)
+  )
+  
+  // If none match predefined stages, just show the unique stages from approvals
+  const finalStages = displayStages.length > 0 
+    ? displayStages.map(s => s.label)
+    : Array.from(usedStageLabels)
+
   // Determine stage status
-  const getStageStatus = (stageId: string): 'not_started' | 'pending' | 'changes_requested' | 'approved' => {
-    const stageApprovals = stageMap.get(stageId)
+  const getStageStatus = (stageLabel: string): 'not_started' | 'pending' | 'changes_requested' | 'approved' => {
+    const stageApprovals = stageMap.get(stageLabel)
     if (!stageApprovals || stageApprovals.length === 0) return 'not_started'
     
     // Get the latest approval for this stage
@@ -161,9 +170,7 @@ function StageProgressGraph({ approvals }: StageProgressGraphProps) {
     }
   }
 
-  // Find which stages have been used
-  const usedStages = RIBA_STAGES.filter(stage => stageMap.has(stage.id))
-  const displayStages = usedStages.length > 0 ? usedStages : RIBA_STAGES.slice(0, 5)
+  if (finalStages.length === 0) return null
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -173,17 +180,17 @@ function StageProgressGraph({ approvals }: StageProgressGraphProps) {
       </h2>
       
       <div className="space-y-3">
-        {displayStages.map((stage, index) => {
-          const status = getStageStatus(stage.id)
-          const stageApprovals = stageMap.get(stage.id) || []
+        {finalStages.map((stageLabel, index) => {
+          const status = getStageStatus(stageLabel)
+          const stageApprovals = stageMap.get(stageLabel) || []
           const latestApproval = stageApprovals.sort((a, b) => 
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )[0]
           
           return (
-            <div key={stage.id} className="relative">
+            <div key={stageLabel} className="relative">
               {/* Connector line */}
-              {index < displayStages.length - 1 && (
+              {index < finalStages.length - 1 && (
                 <div className={`absolute left-3 top-7 w-0.5 h-6 ${
                   status === 'approved' ? 'bg-green-500' : 'bg-gray-200'
                 }`} />
@@ -207,22 +214,20 @@ function StageProgressGraph({ approvals }: StageProgressGraphProps) {
                 
                 {/* Stage info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className={`text-sm font-medium ${
                       status !== 'not_started' ? 'text-gray-900' : 'text-gray-400'
                     }`}>
-                      {stage.label}: {stage.name}
+                      {stageLabel}
                     </p>
-                    {status !== 'not_started' && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        status === 'approved' ? 'bg-green-100 text-green-700' :
-                        status === 'pending' ? 'bg-blue-100 text-blue-700' :
-                        status === 'changes_requested' ? 'bg-amber-100 text-amber-700' :
-                        'bg-gray-100 text-gray-500'
-                      }`}>
-                        {getStatusLabel(status)}
-                      </span>
-                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${
+                      status === 'approved' ? 'bg-green-100 text-green-700' :
+                      status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                      status === 'changes_requested' ? 'bg-amber-100 text-amber-700' :
+                      'bg-gray-100 text-gray-500'
+                    }`}>
+                      {getStatusLabel(status)}
+                    </span>
                   </div>
                   {latestApproval && (
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -254,10 +259,6 @@ function StageProgressGraph({ approvals }: StageProgressGraphProps) {
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-amber-500" />
             <span className="text-gray-600">Changes</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 rounded-full bg-gray-200 border border-gray-300" />
-            <span className="text-gray-600">Not Started</span>
           </div>
         </div>
       </div>
