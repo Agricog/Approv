@@ -8,7 +8,7 @@ import {
   FileText, 
   Image as ImageIcon, 
   ExternalLink, 
-  Download,
+  Eye,
   ZoomIn,
   ZoomOut,
   ChevronLeft,
@@ -47,7 +47,7 @@ export function DeliverablePreview({
   // Determine type from URL if not provided
   const deliverableType = type || inferTypeFromUrl(url)
 
-  const handleDownload = () => {
+  const handleViewPlans = () => {
     trackDeliverableDownloaded(stage, deliverableType || 'unknown')
     window.open(url, '_blank', 'noopener,noreferrer')
   }
@@ -66,10 +66,10 @@ export function DeliverablePreview({
         <Button
           variant="secondary"
           size="sm"
-          onClick={handleDownload}
-          leftIcon={<Download size={16} />}
+          onClick={handleViewPlans}
+          leftIcon={<Eye size={16} />}
         >
-          Download
+          View Plans
         </Button>
       </div>
 
@@ -94,10 +94,10 @@ export function DeliverablePreview({
             <Button
               variant="primary"
               size="sm"
-              onClick={handleDownload}
+              onClick={handleViewPlans}
               className="mt-4"
             >
-              Open Document
+              View Document
             </Button>
           </div>
         )}
@@ -130,7 +130,7 @@ function PdfPreview({ url, stage }: PdfPreviewProps) {
   }
 
   const onDocumentLoadError = () => {
-    setError('Failed to load PDF. Please try downloading the document.')
+    setError('Failed to load PDF. Please try viewing the document directly.')
     setIsLoading(false)
   }
 
@@ -363,9 +363,9 @@ function LinkPreview({ url }: LinkPreviewProps) {
       <Button
         variant="primary"
         onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-        leftIcon={<ExternalLink size={18} />}
+        leftIcon={<Eye size={18} />}
       >
-        Open Document
+        View Document
       </Button>
     </div>
   )
