@@ -3,6 +3,7 @@
  * Project management endpoints (authenticated)
  */
 import { Router } from 'express'
+import PDFDocument from 'pdfkit'
 import { prisma } from '../lib/prisma.js'
 import { createLogger, logAudit } from '../lib/logger.js'
 import { 
@@ -171,7 +172,10 @@ router.get(
             responseTimeHours: true,
             responseNotes: true,
             viewCount: true,
-            reminderCount: true
+            reminderCount: true,
+            deliverableUrl: true,
+            deliverableName: true,
+            deliverableType: true
           }
         }
       }
@@ -223,7 +227,10 @@ router.get(
           responseTimeHours: a.responseTimeHours,
           responseNotes: a.responseNotes,
           viewCount: a.viewCount || 0,
-          reminderCount: a.reminderCount || 0
+          reminderCount: a.reminderCount || 0,
+          deliverableUrl: a.deliverableUrl,
+          deliverableName: a.deliverableName,
+          deliverableType: a.deliverableType
         })),
         stats: {
           totalApprovals: project.approvals.length,
@@ -233,6 +240,436 @@ router.get(
         }
       }
     })
+  })
+)
+
+// =============================================================================
+// PROJECT REPORT (PDF Download)
+// =============================================================================
+
+/**
+ * GET /api/projects/:id/report
+ * Generate and download project approval history report as PDF
+ */
+router.get(
+  '/:id/report',
+  requireProjectAccess,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params
+    const { organizationId, user } = req
+    
+    // Get full project data with all approvals and audit trail
+    const project = await prisma.project.findFirst({
+      where: { id, organizationId },
+      include: {
+        client: true,
+        organization: {
+          select: {
+            name: true,
+            logo: true
+          }
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true
+              }
+            }
+          }
+        },
+        approvals: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            sentBy: {
+              select: {
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        }
+      }
+    })
+    
+    if (!project) {
+      throw new NotFoundError('Project')
+    }
+    
+    // Get audit logs for this project
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        OR: [
+          { entityType: 'project', entityId: id },
+          { entityType: 'approval', metadata: { path: ['projectId'], equals: id } }
+        ]
+      },
+      orderBy: { timestamp: 'asc' },
+      take: 500
+    })
+    
+    // Log report generation
+    logAudit({
+      action: 'project.report_generated',
+      entityType: 'project',
+      entityId: id,
+      userId: user!.id,
+      organizationId: organizationId!,
+      ipAddress: getClientIp(req),
+      metadata: {
+        approvalsCount: project.approvals.length,
+        auditLogsCount: auditLogs.length
+      }
+    })
+    
+    logger.info({
+      projectId: id,
+      userId: user!.id,
+      approvalsCount: project.approvals.length
+    }, 'Project report generated')
+    
+    // Generate PDF
+    const doc = new PDFDocument({ 
+      size: 'A4',
+      margin: 50,
+      info: {
+        Title: `Project Report - ${project.name}`,
+        Author: project.organization.name,
+        Subject: 'Project Approval History Report',
+        Creator: 'Approv'
+      }
+    })
+    
+    // Set response headers
+    const filename = `${project.reference}-report-${new Date().toISOString().split('T')[0]}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    
+    // Pipe PDF to response
+    doc.pipe(res)
+    
+    // Helper function to format dates
+    const formatDate = (date: Date | string | null) => {
+      if (!date) return 'N/A'
+      return new Date(date).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+    
+    const formatShortDate = (date: Date | string | null) => {
+      if (!date) return 'N/A'
+      return new Date(date).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      })
+    }
+    
+    // Colors
+    const primaryColor = '#16a34a'
+    const headerColor = '#1f2937'
+    const textColor = '#374151'
+    const mutedColor = '#6b7280'
+    
+    // =========================================================================
+    // HEADER
+    // =========================================================================
+    
+    doc.fontSize(24)
+       .fillColor(primaryColor)
+       .text('PROJECT APPROVAL REPORT', { align: 'center' })
+    
+    doc.moveDown(0.5)
+    
+    doc.fontSize(10)
+       .fillColor(mutedColor)
+       .text(`Generated: ${formatDate(new Date())}`, { align: 'center' })
+       .text(`Report ID: RPT-${Date.now().toString(36).toUpperCase()}`, { align: 'center' })
+    
+    doc.moveDown(1.5)
+    
+    // =========================================================================
+    // PROJECT DETAILS
+    // =========================================================================
+    
+    doc.fontSize(14)
+       .fillColor(headerColor)
+       .text('PROJECT DETAILS', { underline: true })
+    
+    doc.moveDown(0.5)
+    
+    doc.fontSize(10).fillColor(textColor)
+    
+    const projectDetails = [
+      ['Project Name:', project.name],
+      ['Reference:', project.reference],
+      ['Status:', project.status],
+      ['Current Stage:', project.currentStage || 'Not set'],
+      ['Start Date:', formatShortDate(project.startDate)],
+      ['Target Completion:', formatShortDate(project.targetCompletionDate)],
+      ['Address:', project.address || 'Not specified'],
+      ['Description:', project.description || 'No description']
+    ]
+    
+    projectDetails.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').text(label, { continued: true })
+         .font('Helvetica').text(' ' + value)
+    })
+    
+    doc.moveDown(1.5)
+    
+    // =========================================================================
+    // CLIENT DETAILS
+    // =========================================================================
+    
+    doc.fontSize(14)
+       .fillColor(headerColor)
+       .text('CLIENT INFORMATION', { underline: true })
+    
+    doc.moveDown(0.5)
+    
+    doc.fontSize(10).fillColor(textColor)
+    
+    const clientDetails = [
+      ['Name:', `${project.client.firstName} ${project.client.lastName}`],
+      ['Email:', project.client.email],
+      ['Company:', project.client.company || 'N/A'],
+      ['Phone:', project.client.phone || 'N/A']
+    ]
+    
+    clientDetails.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').text(label, { continued: true })
+         .font('Helvetica').text(' ' + value)
+    })
+    
+    doc.moveDown(1.5)
+    
+    // =========================================================================
+    // APPROVAL SUMMARY
+    // =========================================================================
+    
+    doc.fontSize(14)
+       .fillColor(headerColor)
+       .text('APPROVAL SUMMARY', { underline: true })
+    
+    doc.moveDown(0.5)
+    
+    const totalApprovals = project.approvals.length
+    const approved = project.approvals.filter(a => a.status === 'APPROVED').length
+    const changesRequested = project.approvals.filter(a => a.status === 'CHANGES_REQUESTED').length
+    const pending = project.approvals.filter(a => a.status === 'PENDING').length
+    const expired = project.approvals.filter(a => a.status === 'EXPIRED').length
+    
+    // Calculate average response time
+    const responseTimes = project.approvals
+      .filter(a => a.responseTimeHours)
+      .map(a => a.responseTimeHours!)
+    const avgResponseTime = responseTimes.length > 0
+      ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1)
+      : 'N/A'
+    
+    doc.fontSize(10).fillColor(textColor)
+    
+    const summaryDetails = [
+      ['Total Approvals:', totalApprovals.toString()],
+      ['Approved:', `${approved} (${totalApprovals > 0 ? ((approved/totalApprovals)*100).toFixed(0) : 0}%)`],
+      ['Changes Requested:', changesRequested.toString()],
+      ['Pending:', pending.toString()],
+      ['Expired:', expired.toString()],
+      ['Avg Response Time:', avgResponseTime === 'N/A' ? avgResponseTime : `${avgResponseTime} hours`]
+    ]
+    
+    summaryDetails.forEach(([label, value]) => {
+      doc.font('Helvetica-Bold').text(label, { continued: true })
+         .font('Helvetica').text(' ' + value)
+    })
+    
+    doc.moveDown(1.5)
+    
+    // =========================================================================
+    // APPROVAL HISTORY (Detailed)
+    // =========================================================================
+    
+    doc.fontSize(14)
+       .fillColor(headerColor)
+       .text('APPROVAL HISTORY', { underline: true })
+    
+    doc.moveDown(0.5)
+    
+    if (project.approvals.length === 0) {
+      doc.fontSize(10)
+         .fillColor(mutedColor)
+         .text('No approvals have been created for this project.')
+    } else {
+      project.approvals.forEach((approval, index) => {
+        // Check if we need a new page
+        if (doc.y > 700) {
+          doc.addPage()
+        }
+        
+        // Approval header
+        doc.fontSize(11)
+           .fillColor(headerColor)
+           .font('Helvetica-Bold')
+           .text(`${index + 1}. ${approval.stageLabel}`)
+        
+        doc.moveDown(0.3)
+        
+        // Status badge color
+        let statusColor = mutedColor
+        if (approval.status === 'APPROVED') statusColor = '#16a34a'
+        if (approval.status === 'CHANGES_REQUESTED') statusColor = '#f59e0b'
+        if (approval.status === 'PENDING') statusColor = '#3b82f6'
+        if (approval.status === 'EXPIRED') statusColor = '#ef4444'
+        
+        doc.fontSize(9).fillColor(textColor).font('Helvetica')
+        
+        doc.text(`Status: `, { continued: true })
+           .fillColor(statusColor)
+           .font('Helvetica-Bold')
+           .text(approval.status.replace('_', ' '))
+           .fillColor(textColor)
+           .font('Helvetica')
+        
+        doc.text(`Sent: ${formatDate(approval.createdAt)}`)
+        doc.text(`Sent By: ${approval.sentBy?.firstName || 'System'} ${approval.sentBy?.lastName || ''}`)
+        doc.text(`Expires: ${formatDate(approval.expiresAt)}`)
+        
+        if (approval.respondedAt) {
+          doc.text(`Responded: ${formatDate(approval.respondedAt)}`)
+        }
+        
+        if (approval.responseTimeHours) {
+          doc.text(`Response Time: ${approval.responseTimeHours.toFixed(1)} hours`)
+        }
+        
+        doc.text(`Views: ${approval.viewCount || 0} | Reminders Sent: ${approval.reminderCount || 0}`)
+        
+        if (approval.deliverableName) {
+          doc.text(`Deliverable: ${approval.deliverableName} (${approval.deliverableType || 'Unknown'})`)
+        }
+        
+        // Client feedback
+        if (approval.responseNotes) {
+          doc.moveDown(0.3)
+          doc.fillColor(mutedColor)
+             .font('Helvetica-Oblique')
+             .text(`Client Feedback: "${approval.responseNotes}"`, {
+               indent: 10
+             })
+             .font('Helvetica')
+             .fillColor(textColor)
+        }
+        
+        doc.moveDown(0.8)
+        
+        // Divider line
+        if (index < project.approvals.length - 1) {
+          doc.strokeColor('#e5e7eb')
+             .lineWidth(0.5)
+             .moveTo(50, doc.y)
+             .lineTo(545, doc.y)
+             .stroke()
+          doc.moveDown(0.5)
+        }
+      })
+    }
+    
+    // =========================================================================
+    // AUDIT TRAIL
+    // =========================================================================
+    
+    if (auditLogs.length > 0) {
+      doc.addPage()
+      
+      doc.fontSize(14)
+         .fillColor(headerColor)
+         .text('AUDIT TRAIL', { underline: true })
+      
+      doc.moveDown(0.5)
+      
+      doc.fontSize(8).fillColor(mutedColor)
+         .text('All recorded actions for this project and its approvals.')
+      
+      doc.moveDown(0.5)
+      
+      auditLogs.slice(0, 100).forEach((log, index) => {
+        // Check if we need a new page
+        if (doc.y > 750) {
+          doc.addPage()
+        }
+        
+        const timestamp = formatDate(log.timestamp)
+        const action = log.action.replace(/\./g, ' → ').toUpperCase()
+        
+        doc.fontSize(8)
+           .fillColor(mutedColor)
+           .text(`${timestamp}`, { continued: true })
+           .fillColor(textColor)
+           .text(`  ${action}`)
+        
+        if (log.ipAddress) {
+          doc.fillColor(mutedColor)
+             .text(`    IP: ${log.ipAddress}`)
+        }
+        
+        doc.moveDown(0.2)
+      })
+      
+      if (auditLogs.length > 100) {
+        doc.moveDown(0.5)
+           .fillColor(mutedColor)
+           .text(`... and ${auditLogs.length - 100} more entries (truncated for report size)`)
+      }
+    }
+    
+    // =========================================================================
+    // FOOTER
+    // =========================================================================
+    
+    doc.addPage()
+    
+    doc.fontSize(14)
+       .fillColor(headerColor)
+       .text('DECLARATION', { underline: true })
+    
+    doc.moveDown(0.5)
+    
+    doc.fontSize(10)
+       .fillColor(textColor)
+       .text('This report contains a complete record of all approval requests and client responses for the above project. All timestamps are recorded in UTC and converted to local time for display.')
+    
+    doc.moveDown(1)
+    
+    doc.text('This document may be used as evidence of client approvals and feedback in the event of any disputes regarding project scope, changes, or sign-offs.')
+    
+    doc.moveDown(2)
+    
+    doc.fontSize(10)
+       .fillColor(mutedColor)
+       .text('_________________________________')
+       .text('Signature (if required)')
+    
+    doc.moveDown(1)
+    
+    doc.text('_________________________________')
+       .text('Date')
+    
+    doc.moveDown(3)
+    
+    doc.fontSize(8)
+       .fillColor(mutedColor)
+       .text('Generated by Approv - Client Approval Workflow Platform', { align: 'center' })
+       .text('https://approv.co.uk', { align: 'center' })
+    
+    // Finalize PDF
+    doc.end()
   })
 )
 
