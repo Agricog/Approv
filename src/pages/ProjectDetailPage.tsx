@@ -23,7 +23,8 @@ import {
   FileText,
   Image,
   Link as LinkIcon,
-  CheckCircle
+  CheckCircle,
+  Mail
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
@@ -89,11 +90,12 @@ function ApprovalLink(props: { token: string }) {
 interface ResubmitModalProps {
   approval: Approval
   projectId: string
+  clientName: string
   onClose: () => void
   onSuccess: () => void
 }
 
-function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModalProps) {
+function ResubmitModal({ approval, projectId, clientName, onClose, onSuccess }: ResubmitModalProps) {
   const presignApi = useApi<{ key: string; uploadUrl: string }>()
   const confirmApi = useApi<{ key: string; downloadUrl: string }>()
   const resubmitApi = useApi<{ id: string; token: string; status: string }>()
@@ -105,6 +107,9 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+
+  // NEW: Editable message for the client email
+  const [customMessage, setCustomMessage] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -210,14 +215,15 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
         finalName = 'External Link'
       }
       
-      // Call resubmit API
+      // Call resubmit API with custom message
       const result = await resubmitApi.execute('/api/approvals/' + approval.id + '/resubmit', {
         method: 'POST',
         body: {
           deliverableUrl: finalUrl,
           deliverableName: finalName,
           deliverableType: finalType,
-          expiryDays: 14
+          expiryDays: 14,
+          customMessage: customMessage.trim() || undefined
         }
       })
       
@@ -253,7 +259,7 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
         />
         
         {/* Modal */}
-        <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+        <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
           {/* Close button */}
           <button
             onClick={onClose}
@@ -272,7 +278,7 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
                 Resubmitted Successfully
               </h3>
               <p className="text-gray-600">
-                Client will receive a new email notification.
+                {clientName} will receive an email with the updated plans.
               </p>
             </div>
           ) : (
@@ -287,6 +293,14 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
                   {approval.stageLabel}
                 </p>
               </div>
+
+              {/* REVISED VERSION NOTICE */}
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Note:</strong> This will send a new email to {clientName} clearly marked as an 
+                  <strong> updated/revised version</strong> of the plans, incorporating their previous feedback.
+                </p>
+              </div>
               
               {/* Previous feedback */}
               {approval.responseNotes && (
@@ -298,6 +312,28 @@ function ResubmitModal({ approval, projectId, onClose, onSuccess }: ResubmitModa
                   <p className="text-sm text-orange-700">{approval.responseNotes}</p>
                 </div>
               )}
+
+              {/* EDITABLE EMAIL MESSAGE */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  Message to Client (Optional)
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Add a personal note explaining the changes you've made. This will be included in the email.
+                </p>
+                <textarea
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="e.g., I've updated the window specifications as requested and revised the east elevation drawings..."
+                  rows={4}
+                  maxLength={1000}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                />
+                <p className="text-xs text-gray-400 mt-1 text-right">
+                  {customMessage.length}/1000 characters
+                </p>
+              </div>
               
               {/* Deliverable type selector */}
               <div className="mb-6">
@@ -762,10 +798,11 @@ export default function ProjectDetailPage() {
       </main>
 
       {/* Resubmit Modal */}
-      {resubmitApproval && projectId && (
+      {resubmitApproval && projectId && project && (
         <ResubmitModal
           approval={resubmitApproval}
           projectId={projectId}
+          clientName={project.client.name}
           onClose={() => setResubmitApproval(null)}
           onSuccess={loadProject}
         />
