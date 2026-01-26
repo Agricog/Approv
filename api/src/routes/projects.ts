@@ -3,7 +3,9 @@
  * Project management endpoints (authenticated)
  */
 import { Router, Response } from 'express'
-import PDFDocument from 'pdfkit'
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
+const PDFDocument = require('pdfkit')
 import { prisma } from '../lib/prisma.js'
 import { createLogger, logAudit } from '../lib/logger.js'
 import { 
@@ -326,183 +328,190 @@ router.get(
       })
     }
     
-    // Set response headers BEFORE creating PDF
+    // Set response headers
     const filename = `${project.reference}-report-${new Date().toISOString().split('T')[0]}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
     
-    // Create PDF document
-    const doc = new PDFDocument({ 
-      size: 'A4',
-      margin: 50,
-      bufferPages: true
+    // Create PDF and wrap in promise
+    await new Promise<void>((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ 
+          size: 'A4',
+          margin: 50,
+          bufferPages: true
+        })
+        
+        // Handle stream events
+        doc.on('end', () => resolve())
+        doc.on('error', (err: Error) => reject(err))
+        
+        // Pipe to response
+        doc.pipe(res)
+        
+        // =========================================================================
+        // HEADER
+        // =========================================================================
+        
+        doc.fontSize(22).text('PROJECT APPROVAL REPORT', { align: 'center' })
+        doc.moveDown(0.3)
+        doc.fontSize(10).text(`Generated: ${formatDate(new Date())}`, { align: 'center' })
+        doc.fontSize(9).text(`Report ID: RPT-${Date.now().toString(36).toUpperCase()}`, { align: 'center' })
+        doc.moveDown(1.5)
+        
+        // =========================================================================
+        // PROJECT DETAILS
+        // =========================================================================
+        
+        doc.fontSize(14).text('PROJECT DETAILS')
+        doc.moveDown(0.3)
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.moveDown(0.5)
+        
+        doc.fontSize(10)
+        doc.text(`Project Name: ${project.name}`)
+        doc.text(`Reference: ${project.reference}`)
+        doc.text(`Status: ${project.status}`)
+        doc.text(`Current Stage: ${project.currentStage || 'Not set'}`)
+        doc.text(`Start Date: ${formatShortDate(project.startDate)}`)
+        doc.text(`Target Completion: ${formatShortDate(project.targetCompletionDate)}`)
+        if (project.address) {
+          doc.text(`Address: ${project.address}`)
+        }
+        doc.moveDown(1)
+        
+        // =========================================================================
+        // CLIENT DETAILS
+        // =========================================================================
+        
+        doc.fontSize(14).text('CLIENT INFORMATION')
+        doc.moveDown(0.3)
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.moveDown(0.5)
+        
+        doc.fontSize(10)
+        doc.text(`Name: ${project.client.firstName} ${project.client.lastName}`)
+        doc.text(`Email: ${project.client.email}`)
+        if (project.client.company) {
+          doc.text(`Company: ${project.client.company}`)
+        }
+        if (project.client.phone) {
+          doc.text(`Phone: ${project.client.phone}`)
+        }
+        doc.moveDown(1)
+        
+        // =========================================================================
+        // APPROVAL SUMMARY
+        // =========================================================================
+        
+        doc.fontSize(14).text('APPROVAL SUMMARY')
+        doc.moveDown(0.3)
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.moveDown(0.5)
+        
+        const totalApprovals = project.approvals.length
+        const approved = project.approvals.filter(a => a.status === 'APPROVED').length
+        const changesRequested = project.approvals.filter(a => a.status === 'CHANGES_REQUESTED').length
+        const pending = project.approvals.filter(a => a.status === 'PENDING').length
+        const expired = project.approvals.filter(a => a.status === 'EXPIRED').length
+        
+        const responseTimes = project.approvals
+          .filter(a => a.responseTimeHours)
+          .map(a => a.responseTimeHours!)
+        const avgResponseTime = responseTimes.length > 0
+          ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(1)
+          : 'N/A'
+        
+        doc.fontSize(10)
+        doc.text(`Total Approvals: ${totalApprovals}`)
+        doc.text(`Approved: ${approved}`)
+        doc.text(`Changes Requested: ${changesRequested}`)
+        doc.text(`Pending: ${pending}`)
+        doc.text(`Expired: ${expired}`)
+        doc.text(`Average Response Time: ${avgResponseTime === 'N/A' ? avgResponseTime : avgResponseTime + ' hours'}`)
+        doc.moveDown(1)
+        
+        // =========================================================================
+        // APPROVAL HISTORY
+        // =========================================================================
+        
+        doc.fontSize(14).text('APPROVAL HISTORY')
+        doc.moveDown(0.3)
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.moveDown(0.5)
+        
+        if (project.approvals.length === 0) {
+          doc.fontSize(10).text('No approvals have been created for this project.')
+        } else {
+          project.approvals.forEach((approval, index) => {
+            if (doc.y > 700) {
+              doc.addPage()
+            }
+            
+            doc.fontSize(11).text(`${index + 1}. ${approval.stageLabel}`)
+            doc.moveDown(0.2)
+            
+            doc.fontSize(9)
+            doc.text(`   Status: ${approval.status.replace('_', ' ')}`)
+            doc.text(`   Sent: ${formatDate(approval.createdAt)}`)
+            if (approval.sentBy) {
+              doc.text(`   Sent by: ${approval.sentBy.firstName} ${approval.sentBy.lastName}`)
+            }
+            doc.text(`   Expires: ${formatDate(approval.expiresAt)}`)
+            
+            if (approval.respondedAt) {
+              doc.text(`   Responded: ${formatDate(approval.respondedAt)}`)
+            }
+            
+            if (approval.responseTimeHours) {
+              doc.text(`   Response Time: ${approval.responseTimeHours.toFixed(1)} hours`)
+            }
+            
+            doc.text(`   Views: ${approval.viewCount || 0} | Reminders: ${approval.reminderCount || 0}`)
+            
+            if (approval.responseNotes) {
+              doc.moveDown(0.2)
+              doc.fontSize(9).text(`   Client Feedback: "${approval.responseNotes}"`)
+            }
+            
+            doc.moveDown(0.5)
+          })
+        }
+        
+        // =========================================================================
+        // DECLARATION
+        // =========================================================================
+        
+        doc.addPage()
+        
+        doc.fontSize(14).text('DECLARATION')
+        doc.moveDown(0.3)
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
+        doc.moveDown(0.5)
+        
+        doc.fontSize(10)
+        doc.text('This report contains a complete record of all approval requests and client responses for the above project. All timestamps are recorded and converted to local time for display.')
+        doc.moveDown(0.5)
+        doc.text('This document may be used as evidence of client approvals and feedback in the event of any disputes regarding project scope, changes, or sign-offs.')
+        doc.moveDown(2)
+        
+        doc.text('_________________________________')
+        doc.text('Signature (if required)')
+        doc.moveDown(1)
+        doc.text('_________________________________')
+        doc.text('Date')
+        doc.moveDown(3)
+        
+        doc.fontSize(8).text('Generated by Approv - https://approv.co.uk', { align: 'center' })
+        
+        // Finalize PDF - this triggers the 'end' event
+        doc.end()
+      } catch (err) {
+        reject(err)
+      }
     })
-    
-    // Pipe to response
-    doc.pipe(res)
-    
-    // =========================================================================
-    // HEADER
-    // =========================================================================
-    
-    doc.fontSize(22).text('PROJECT APPROVAL REPORT', { align: 'center' })
-    doc.moveDown(0.3)
-    doc.fontSize(10).text(`Generated: ${formatDate(new Date())}`, { align: 'center' })
-    doc.fontSize(9).text(`Report ID: RPT-${Date.now().toString(36).toUpperCase()}`, { align: 'center' })
-    doc.moveDown(1.5)
-    
-    // =========================================================================
-    // PROJECT DETAILS
-    // =========================================================================
-    
-    doc.fontSize(14).text('PROJECT DETAILS')
-    doc.moveDown(0.3)
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
-    doc.moveDown(0.5)
-    
-    doc.fontSize(10)
-    doc.text(`Project Name: ${project.name}`)
-    doc.text(`Reference: ${project.reference}`)
-    doc.text(`Status: ${project.status}`)
-    doc.text(`Current Stage: ${project.currentStage || 'Not set'}`)
-    doc.text(`Start Date: ${formatShortDate(project.startDate)}`)
-    doc.text(`Target Completion: ${formatShortDate(project.targetCompletionDate)}`)
-    if (project.address) {
-      doc.text(`Address: ${project.address}`)
-    }
-    doc.moveDown(1)
-    
-    // =========================================================================
-    // CLIENT DETAILS
-    // =========================================================================
-    
-    doc.fontSize(14).text('CLIENT INFORMATION')
-    doc.moveDown(0.3)
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
-    doc.moveDown(0.5)
-    
-    doc.fontSize(10)
-    doc.text(`Name: ${project.client.firstName} ${project.client.lastName}`)
-    doc.text(`Email: ${project.client.email}`)
-    if (project.client.company) {
-      doc.text(`Company: ${project.client.company}`)
-    }
-    if (project.client.phone) {
-      doc.text(`Phone: ${project.client.phone}`)
-    }
-    doc.moveDown(1)
-    
-    // =========================================================================
-    // APPROVAL SUMMARY
-    // =========================================================================
-    
-    const totalApprovals = project.approvals.length
-    const approved = project.approvals.filter(a => a.status === 'APPROVED').length
-    const changesRequested = project.approvals.filter(a => a.status === 'CHANGES_REQUESTED').length
-    const pending = project.approvals.filter(a => a.status === 'PENDING').length
-    const expired = project.approvals.filter(a => a.status === 'EXPIRED').length
-    
-    doc.fontSize(14).text('APPROVAL SUMMARY')
-    doc.moveDown(0.3)
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
-    doc.moveDown(0.5)
-    
-    doc.fontSize(10)
-    doc.text(`Total Approvals: ${totalApprovals}`)
-    doc.text(`Approved: ${approved}`)
-    doc.text(`Changes Requested: ${changesRequested}`)
-    doc.text(`Pending: ${pending}`)
-    doc.text(`Expired: ${expired}`)
-    doc.moveDown(1)
-    
-    // =========================================================================
-    // APPROVAL HISTORY
-    // =========================================================================
-    
-    doc.fontSize(14).text('APPROVAL HISTORY')
-    doc.moveDown(0.3)
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
-    doc.moveDown(0.5)
-    
-    if (project.approvals.length === 0) {
-      doc.fontSize(10).text('No approvals have been created for this project.')
-    } else {
-      project.approvals.forEach((approval, index) => {
-        // Check if we need a new page
-        if (doc.y > 700) {
-          doc.addPage()
-        }
-        
-        doc.fontSize(11).text(`${index + 1}. ${approval.stageLabel}`)
-        doc.moveDown(0.2)
-        
-        doc.fontSize(9)
-        doc.text(`   Status: ${approval.status.replace('_', ' ')}`)
-        doc.text(`   Sent: ${formatDate(approval.createdAt)}`)
-        
-        if (approval.sentBy) {
-          doc.text(`   Sent by: ${approval.sentBy.firstName} ${approval.sentBy.lastName}`)
-        }
-        
-        if (approval.expiresAt) {
-          doc.text(`   Expires: ${formatDate(approval.expiresAt)}`)
-        }
-        
-        if (approval.respondedAt) {
-          doc.text(`   Responded: ${formatDate(approval.respondedAt)}`)
-        }
-        
-        if (approval.responseTimeHours) {
-          doc.text(`   Response Time: ${approval.responseTimeHours.toFixed(1)} hours`)
-        }
-        
-        doc.text(`   Views: ${approval.viewCount || 0} | Reminders: ${approval.reminderCount || 0}`)
-        
-        if (approval.deliverableName) {
-          doc.text(`   Deliverable: ${approval.deliverableName}`)
-        }
-        
-        // Client feedback
-        if (approval.responseNotes) {
-          doc.moveDown(0.2)
-          doc.fontSize(9).text(`   Client Feedback: "${approval.responseNotes}"`)
-        }
-        
-        doc.moveDown(0.8)
-      })
-    }
-    
-    // =========================================================================
-    // FOOTER / DECLARATION
-    // =========================================================================
-    
-    doc.addPage()
-    
-    doc.fontSize(14).text('DECLARATION')
-    doc.moveDown(0.3)
-    doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke()
-    doc.moveDown(0.5)
-    
-    doc.fontSize(10)
-    doc.text('This report contains a complete record of all approval requests and client responses for the above project. All timestamps are recorded and converted to local time for display.')
-    doc.moveDown(0.5)
-    doc.text('This document may be used as evidence of client approvals and feedback in the event of any disputes regarding project scope, changes, or sign-offs.')
-    doc.moveDown(2)
-    
-    doc.text('_________________________________')
-    doc.text('Signature (if required)')
-    doc.moveDown(1)
-    doc.text('_________________________________')
-    doc.text('Date')
-    doc.moveDown(3)
-    
-    doc.fontSize(8).text('Generated by Approv - https://approv.co.uk', { align: 'center' })
-    
-    // Finalize PDF
-    doc.end()
   })
 )
-
 // =============================================================================
 // CREATE & UPDATE
 // =============================================================================
