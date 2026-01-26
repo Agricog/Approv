@@ -24,7 +24,10 @@ import {
   Image,
   Link as LinkIcon,
   CheckCircle,
-  Mail
+  Mail,
+  Download,
+  Clock,
+  BarChart3
 } from 'lucide-react'
 import * as Sentry from '@sentry/react'
 import { useApi } from '../hooks/useApi'
@@ -80,6 +83,185 @@ function ApprovalLink(props: { token: string }) {
       View Link
       <ExternalLink className="w-3 h-3" />
     </a>
+  )
+}
+
+// =============================================================================
+// STAGE PROGRESS GRAPH COMPONENT
+// =============================================================================
+
+interface StageProgressGraphProps {
+  approvals: Approval[]
+}
+
+// RIBA Stage definitions
+const RIBA_STAGES = [
+  { id: '0', label: 'Stage 0', name: 'Strategic Definition' },
+  { id: '1', label: 'Stage 1', name: 'Preparation & Briefing' },
+  { id: '2', label: 'Stage 2', name: 'Concept Design' },
+  { id: '3', label: 'Stage 3', name: 'Spatial Coordination' },
+  { id: '4', label: 'Stage 4', name: 'Technical Design' },
+  { id: '5', label: 'Stage 5', name: 'Manufacturing & Construction' },
+  { id: '6', label: 'Stage 6', name: 'Handover' },
+  { id: '7', label: 'Stage 7', name: 'Use' },
+]
+
+function StageProgressGraph({ approvals }: StageProgressGraphProps) {
+  // Group approvals by stage
+  const stageMap = new Map<string, Approval[]>()
+  
+  approvals.forEach(approval => {
+    const stage = approval.stage
+    if (!stageMap.has(stage)) {
+      stageMap.set(stage, [])
+    }
+    stageMap.get(stage)!.push(approval)
+  })
+
+  // Determine stage status
+  const getStageStatus = (stageId: string): 'not_started' | 'pending' | 'changes_requested' | 'approved' => {
+    const stageApprovals = stageMap.get(stageId)
+    if (!stageApprovals || stageApprovals.length === 0) return 'not_started'
+    
+    // Get the latest approval for this stage
+    const latestApproval = stageApprovals.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0]
+    
+    if (latestApproval.status === 'APPROVED') return 'approved'
+    if (latestApproval.status === 'CHANGES_REQUESTED') return 'changes_requested'
+    if (latestApproval.status === 'PENDING') return 'pending'
+    return 'not_started'
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'bg-green-500'
+      case 'pending': return 'bg-blue-500'
+      case 'changes_requested': return 'bg-amber-500'
+      default: return 'bg-gray-200'
+    }
+  }
+
+  const getStatusBorderColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'border-green-500'
+      case 'pending': return 'border-blue-500'
+      case 'changes_requested': return 'border-amber-500'
+      default: return 'border-gray-300'
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'approved': return 'Approved'
+      case 'pending': return 'Pending'
+      case 'changes_requested': return 'Changes Requested'
+      default: return 'Not Started'
+    }
+  }
+
+  // Find which stages have been used
+  const usedStages = RIBA_STAGES.filter(stage => stageMap.has(stage.id))
+  const displayStages = usedStages.length > 0 ? usedStages : RIBA_STAGES.slice(0, 5)
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <BarChart3 className="w-5 h-5 text-gray-400" />
+        Stage Progress
+      </h2>
+      
+      <div className="space-y-3">
+        {displayStages.map((stage, index) => {
+          const status = getStageStatus(stage.id)
+          const stageApprovals = stageMap.get(stage.id) || []
+          const latestApproval = stageApprovals.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )[0]
+          
+          return (
+            <div key={stage.id} className="relative">
+              {/* Connector line */}
+              {index < displayStages.length - 1 && (
+                <div className={`absolute left-3 top-7 w-0.5 h-6 ${
+                  status === 'approved' ? 'bg-green-500' : 'bg-gray-200'
+                }`} />
+              )}
+              
+              <div className="flex items-start gap-3">
+                {/* Status indicator */}
+                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  getStatusBorderColor(status)
+                } ${status !== 'not_started' ? getStatusColor(status) : 'bg-white'}`}>
+                  {status === 'approved' && (
+                    <CheckCircle className="w-4 h-4 text-white" />
+                  )}
+                  {status === 'pending' && (
+                    <Clock className="w-3 h-3 text-white" />
+                  )}
+                  {status === 'changes_requested' && (
+                    <RefreshCw className="w-3 h-3 text-white" />
+                  )}
+                </div>
+                
+                {/* Stage info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className={`text-sm font-medium ${
+                      status !== 'not_started' ? 'text-gray-900' : 'text-gray-400'
+                    }`}>
+                      {stage.label}: {stage.name}
+                    </p>
+                    {status !== 'not_started' && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        status === 'approved' ? 'bg-green-100 text-green-700' :
+                        status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                        status === 'changes_requested' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-500'
+                      }`}>
+                        {getStatusLabel(status)}
+                      </span>
+                    )}
+                  </div>
+                  {latestApproval && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {latestApproval.respondedAt 
+                        ? `Responded ${new Date(latestApproval.respondedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+                        : `Sent ${new Date(latestApproval.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+                      }
+                      {stageApprovals.length > 1 && ` (${stageApprovals.length} submissions)`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="flex flex-wrap gap-3 text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-gray-600">Approved</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-gray-600">Pending</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="text-gray-600">Changes</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-gray-200 border border-gray-300" />
+            <span className="text-gray-600">Not Started</span>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -711,6 +893,33 @@ export default function ProjectDetailPage() {
                   <p className="text-sm font-medium text-gray-900">{formatDate(project.createdAt)}</p>
                 </div>
               </div>
+            </div>
+
+            {/* Stage Progress Graph */}
+            {project.approvals && project.approvals.length > 0 && (
+              <StageProgressGraph approvals={project.approvals} />
+            )}
+
+            {/* Download Report */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-gray-400" />
+                Project Report
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Download a complete PDF report of all approvals, client feedback, and audit history for this project.
+              </p>
+              <a
+                href={`/api/projects/${project.id}/report`}
+                download
+                className="inline-flex items-center gap-2 w-full justify-center bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition font-medium text-sm border border-gray-300"
+              >
+                <Download className="w-4 h-4" />
+                Download Report (PDF)
+              </a>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Useful for records or dispute resolution
+              </p>
             </div>
           </div>
 
