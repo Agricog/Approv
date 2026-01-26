@@ -196,6 +196,17 @@ function ResubmitModal({ approval, projectId, clientName, onClose, onSuccess }: 
 
   const handleSubmit = async () => {
     setError(null)
+    
+    // Validation: require either a new file/link OR a custom message
+    const hasNewFile = deliverableType && deliverableType !== 'LINK' && file
+    const hasNewLink = deliverableType === 'LINK' && externalUrl.trim().length > 0
+    const hasMessage = customMessage.trim().length > 0
+    
+    if (!hasNewFile && !hasNewLink && !hasMessage) {
+      setError('Please either upload a revised file, provide a link, or add a message to the client explaining the changes.')
+      return
+    }
+    
     setSubmitting(true)
     
     try {
@@ -298,7 +309,8 @@ function ResubmitModal({ approval, projectId, clientName, onClose, onSuccess }: 
               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm text-blue-800">
                   <strong>Note:</strong> This will send a new email to {clientName} clearly marked as an 
-                  <strong> updated/revised version</strong> of the plans, incorporating their previous feedback.
+                  <strong> updated/revised version</strong> of the plans. You must either upload a new file/link 
+                  <strong> or </strong> add a message explaining the changes.
                 </p>
               </div>
               
@@ -317,10 +329,11 @@ function ResubmitModal({ approval, projectId, clientName, onClose, onSuccess }: 
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Message to Client (Optional)
+                  Message to Client
+                  <span className="text-xs text-gray-500 font-normal">(required if no new file attached)</span>
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  Add a personal note explaining the changes you've made. This will be included in the email.
+                  Add a note explaining the changes you've made. This will be included in the email.
                 </p>
                 <textarea
                   value={customMessage}
@@ -338,7 +351,8 @@ function ResubmitModal({ approval, projectId, clientName, onClose, onSuccess }: 
               {/* Deliverable type selector */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Upload Revised Deliverable (Optional)
+                  Upload Revised Deliverable
+                  <span className="text-xs text-gray-500 font-normal ml-2">(required if no message added)</span>
                 </label>
                 <div className="grid grid-cols-3 gap-3">
                   <button
