@@ -913,7 +913,8 @@ export default function ProjectDetailPage() {
               <button
                 onClick={async () => {
                   try {
-                    const response = await fetch(`/api/projects/${project.id}/report`, {
+                    const apiUrl = import.meta.env.VITE_API_URL || ''
+                    const response = await fetch(apiUrl + '/api/projects/' + project.id + '/report', {
                       method: 'GET',
                       credentials: 'include'
                     })
